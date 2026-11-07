@@ -57,6 +57,9 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "Verifica nombre, correo y contraseña (mínimo 8 caracteres)"));
         }
+        if (request.getConfirmPassword() != null && !password.equals(request.getConfirmPassword())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Las contraseñas no coinciden"));
+        }
         if (userRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "El email ya está registrado"));
         }
