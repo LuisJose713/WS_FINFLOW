@@ -30,21 +30,16 @@ public class JwtFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        System.out.println("→ JwtFilter: " + request.getMethod() + " " + request.getRequestURI());
-
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        System.out.println("→ Auth header: " + authHeader);
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7).trim();
             try {
                 String email = jwtUtil.validateTokenAndGetEmail(token);
-                System.out.println("→ Token válido, email: " + email);
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(email, null, List.of());
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception e) {
-                System.out.println("→ Token inválido: " + e.getMessage());
                 SecurityContextHolder.clearContext();
             }
         }
