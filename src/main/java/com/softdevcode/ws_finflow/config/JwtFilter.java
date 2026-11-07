@@ -1,6 +1,9 @@
 package com.softdevcode.ws_finflow.config;
 
 import com.softdevcode.ws_finflow.security.JwtUtil;
+import com.softdevcode.ws_finflow.repository.UserRepository;
+import com.softdevcode.ws_finflow.entity.User;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,9 +22,11 @@ import java.util.List;
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
-    public JwtFilter(JwtUtil jwtUtil) {
+    public JwtFilter(JwtUtil jwtUtil, UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -36,9 +41,14 @@ public class JwtFilter extends OncePerRequestFilter {
             String token = authHeader.substring(7).trim();
             try {
                 String email = jwtUtil.validateTokenAndGetEmail(token);
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(email, null, List.of());
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                User user = userRepository.findByEmail(email).orElse(null);
+                if (user != null) {
+                    String role = "ADMIN".equals(user.getRole()) ? "ADMIN" : "USER";
+                    UsernamePasswordAuthenticationToken auth =
+                            new UsernamePasswordAuthenticationToken(email, null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();
             }
