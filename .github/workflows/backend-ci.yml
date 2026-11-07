@@ -30,6 +30,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      JWT_SECRET: finflow-ci-only-signing-key-never-use-outside-tests-2026
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/finflow_test
       SPRING_DATASOURCE_USERNAME: finflow_test
       SPRING_DATASOURCE_PASSWORD: test_only_password
