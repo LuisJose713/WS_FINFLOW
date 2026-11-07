@@ -23,6 +23,7 @@ import static org.mockito.Mockito.*;
 class AuthControllerValidationTest {
     @Mock UserRepository users;
     @Mock JwtUtil jwt;
+    @Mock com.softdevcode.ws_finflow.security.AuthRateLimiter limiter;
     @InjectMocks AuthController controller;
 
     @Test
@@ -69,12 +70,12 @@ class AuthControllerValidationTest {
             saved.setId(99L);
             return saved;
         });
-        when(jwt.generateToken("tester@example.com", false)).thenReturn("short-lived-jwt");
+        when(jwt.generateToken("tester@example.com", false, 0)).thenReturn("short-lived-jwt");
 
         ResponseEntity<?> response = controller.register(request, "mobile");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(jwt).generateToken("tester@example.com", false);
-        verify(jwt, never()).generateToken(anyString(), eq(true));
+        verify(jwt).generateToken("tester@example.com", false, 0);
+        verify(jwt, never()).generateToken(anyString(), eq(true), anyInt());
     }
 }

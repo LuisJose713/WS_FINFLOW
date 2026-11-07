@@ -26,26 +26,36 @@ public class JwtUtil {
     }
 
     public String generateToken(String email, boolean longLived) {
+        return generateToken(email,longLived,0);
+    }
+
+    public String generateToken(String email, boolean longLived, int tokenVersion) {
         long now = System.currentTimeMillis();
         long expiration = longLived ? MOBILE_EXPIRATION : WEB_EXPIRATION;
         return Jwts.builder()
-                .setSubject(email)
+.setSubject(email)
+                .claim("ver", tokenVersion)
                 .setIssuedAt(new Date(now))
                 .setExpiration(new Date(now + expiration))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    public String validateTokenAndGetEmail(String token) throws Exception {
+    public record ValidatedToken(String email, int version) {}
+
+    public ValidatedToken validateToken(String token) throws Exception {
         try {
             Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
-            return claims.getSubject();
+                    .setSigningKey(key).build().parseClaimsJws(token).getBody();
+            Object raw = claims.get("ver");
+            int version = raw instanceof Number ? ((Number)raw).intValue() : 0;
+            return new ValidatedToken(claims.getSubject(),version);
         } catch (Exception e) {
             throw new Exception("Token inválido o expirado");
         }
+    }
+
+    public String validateTokenAndGetEmail(String token) throws Exception {
+        return validateToken(token).email();
     }
 }

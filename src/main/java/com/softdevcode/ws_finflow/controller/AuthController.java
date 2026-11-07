@@ -19,6 +19,7 @@ import java.util.Optional;
 public class AuthController {
     @Autowired private UserRepository userRepository;
     @Autowired private JwtUtil jwtUtil;
+    @Autowired private com.softdevcode.ws_finflow.security.AuthRateLimiter rateLimiter;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @PostMapping("/login")
@@ -30,14 +31,20 @@ public class AuthController {
                 || request.getPassword().length() > 128) {
             return ResponseEntity.badRequest().body(Map.of("error", "Solicitud inválida"));
         }
-        Optional<User> userOpt = userRepository.findByEmail(request.getEmail().trim());
+        String normalizedEmail=request.getEmail().trim();
+        if(rateLimiter.isLocked(normalizedEmail)) {
+            return ResponseEntity.status(429).body(Map.of("error","Demasiados intentos. Prueba más tarde."));
+        }
+        Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
         if (userOpt.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOpt.get().getPassword())) {
-            // Never reveal whether an account exists.
+            // Do not disclose whether the account exists. Throttle by a hashed identifier.
+            rateLimiter.recordFailure(normalizedEmail);
             return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
         }
         User user = userOpt.get();
+        rateLimiter.clear(normalizedEmail);
         // Mobile TTL must not be granted based on an untrusted client-supplied header.
-        String token = jwtUtil.generateToken(user.getEmail(), false);
+        String token = jwtUtil.generateToken(user.getEmail(), false, user.getTokenVersion());
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
@@ -78,6 +85,45 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
+    }
+
+    public record ChangePasswordRequest(String currentPassword,String newPassword,String confirmPassword){}
+    public record ConfirmPasswordRequest(String password){}
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(Authentication authentication,@RequestBody ChangePasswordRequest request){
+        if(authentication==null)
+            return ResponseEntity.status(401).body(Map.of("error","Sesión requerida"));
+        User user=userRepository.findByEmail(authentication.getName())
+            .orElseThrow(()->new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED));
+        if(request==null||request.currentPassword()==null||request.newPassword()==null||
+                request.confirmPassword()==null || !request.newPassword().equals(request.confirmPassword()) ||
+                request.newPassword().length()<12||request.newPassword().length()>128)
+            return ResponseEntity.badRequest().body(Map.of("error","La nueva contraseña debe tener al menos 12 caracteres y coincidir"));
+        if(!passwordEncoder.matches(request.currentPassword(),user.getPassword()))
+            return ResponseEntity.status(403).body(Map.of("error","Contraseña actual incorrecta"));
+        if(passwordEncoder.matches(request.newPassword(),user.getPassword()))
+            return ResponseEntity.badRequest().body(Map.of("error","La nueva contraseña debe ser diferente"));
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.setTokenVersion((user.getTokenVersion()==null?0:user.getTokenVersion())+1);
+        user.setPasswordChangedAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("status","password_changed","logoutRequired",true));
+    }
+
+    @PostMapping("/revoke-sessions")
+    public ResponseEntity<?> revokeSessions(Authentication authentication,@RequestBody ConfirmPasswordRequest request){
+        if(authentication==null) return ResponseEntity.status(401).body(Map.of("error","Sesión requerida"));
+        User user=userRepository.findByEmail(authentication.getName())
+            .orElseThrow(()->new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED));
+        if(request==null||request.password()==null||
+            !passwordEncoder.matches(request.password(),user.getPassword()))
+            return ResponseEntity.status(403).body(Map.of("error","Contraseña incorrecta"));
+        user.setTokenVersion((user.getTokenVersion()==null?0:user.getTokenVersion())+1);
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("status","sessions_revoked","logoutRequired",true));
     }
 
     @GetMapping("/me")
