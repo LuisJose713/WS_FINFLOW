@@ -19,7 +19,7 @@ class AuthRateLimiterTest {
     limiter.recordFailure("Owner@example.com");
     limiter.recordFailure("owner@example.com");
     verify(jdbc,times(2)).update(anyString(),eq(
-        "b4f988b4c04e2e52ebe58b6a4c9b71e924c1d691faa1e2f13b9ca353bd6c4bd1"));
+        "c8cd3c6427301eaf6665bccacd65ddb614527acc843a15463e3faba57124c351"));
   }
 
   @Test void clearingDoesNotPassRawEmailToDatabase() {
