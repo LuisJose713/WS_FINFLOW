@@ -87,6 +87,14 @@ public class TransactionService {
     public Transaction create(Integer userId, TransactionRequest request) {
         Transaction tx = new Transaction();
         tx.setUserId(userId);
+        if (request.getAmount() == null || !Double.isFinite(request.getAmount()) || request.getAmount() <= 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, "El monto debe ser positivo");
+        }
+        if (!"income".equals(request.getType()) && !"expense".equals(request.getType())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, "Tipo de transacción inválido");
+        }
         tx.setAmount(request.getAmount());
         tx.setType(request.getType());
         tx.setCategoryId(request.getCategoryId());
@@ -100,10 +108,42 @@ public class TransactionService {
         return repository.save(tx);
     }
 
-    // ── Eliminar ──────────────────────────────────────────
+    // ── Editar únicamente una transacción propia ─────────
+    @Transactional
+    public Transaction update(Integer userId, Long id, TransactionRequest request) {
+        Transaction tx = getOwnedTransaction(userId, id);
+        if (request.getAmount() != null) {
+            if (!Double.isFinite(request.getAmount()) || request.getAmount() <= 0) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "El monto debe ser positivo");
+            }
+            tx.setAmount(request.getAmount());
+        }
+        if (request.getType() != null) {
+            if (!"income".equals(request.getType()) && !"expense".equals(request.getType())) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Tipo de transacción inválido");
+            }
+            tx.setType(request.getType());
+        }
+        if (request.getCategoryId() != null) tx.setCategoryId(request.getCategoryId());
+        if (request.getDescription() != null) tx.setDescription(request.getDescription());
+        if (request.getDate() != null) tx.setDate(request.getDate().atStartOfDay());
+        if (request.getCurrency() != null) tx.setCurrency(request.getCurrency());
+        if (request.getStatus() != null) tx.setStatus(request.getStatus());
+        return repository.save(tx);
+    }
+
+    // ── Eliminar solo registros del usuario autenticado ───
     @Transactional
     public void delete(Integer userId, Long id) {
-        repository.deleteById(id);
+        repository.delete(getOwnedTransaction(userId, id));
+    }
+
+    private Transaction getOwnedTransaction(Integer userId, Long id) {
+        return repository.findByIdAndUserId(id, userId)
+            .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "Transacción no encontrada"));
     }
 
     // ── Stats ─────────────────────────────────────────────
