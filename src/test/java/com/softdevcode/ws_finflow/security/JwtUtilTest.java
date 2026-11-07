@@ -27,6 +27,15 @@ class JwtUtilTest {
     }
 
     @Test
+    void includesTokenVersionForServerSideRevocation() throws Exception {
+        JwtUtil jwt = new JwtUtil(KEY);
+        String token = jwt.generateToken("owner@example.com", false, 7);
+        assertEquals(7, jwt.validateToken(token).version());
+        assertEquals("owner@example.com", jwt.validateToken(token).email());
+        assertEquals(0, jwt.validateToken(jwt.generateToken("owner@example.com", false)).version());
+    }
+
+    @Test
     void usesFiveHoursForWebAndThirtyDaysForMobile() {
         JwtUtil jwt = new JwtUtil(KEY);
         Date webExpiration = Jwts.parserBuilder()
