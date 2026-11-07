@@ -1,0 +1,21 @@
+# Solo para desarrollo local. Nunca conectar este contenedor a Neon.
+name: finflow-local
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: finflow_dev
+      POSTGRES_USER: finflow_dev
+      POSTGRES_PASSWORD: ${FINFLOW_DEV_DB_PASSWORD:-finflow_local_only_2026}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - finflow_local_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finflow_dev -d finflow_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  finflow_local_pgdata:
