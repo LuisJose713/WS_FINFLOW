@@ -34,6 +34,7 @@ public class PlannedExpenseService {
         PlannedExpense pe = new PlannedExpense();
         pe.setUserId(userId);
         pe.setTitle(req.getTitle());
+        validateAmount(req.getAmount());
         pe.setAmount(req.getAmount());
         pe.setCategoryId(req.getCategoryId());
         pe.setDueDate(req.getDueDate());
@@ -49,7 +50,13 @@ public class PlannedExpenseService {
     public PlannedExpense update(Integer userId, Long id, PlannedExpenseRequest req) {
         PlannedExpense pe = getById(userId, id);
         if (req.getTitle()      != null) pe.setTitle(req.getTitle());
-        if (req.getAmount()     != null) pe.setAmount(req.getAmount());
+        if (!"pending".equals(pe.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se puede editar un gasto pendiente");
+        }
+        if (req.getAmount() != null) {
+            validateAmount(req.getAmount());
+            pe.setAmount(req.getAmount());
+        }
         if (req.getCategoryId() != null) pe.setCategoryId(req.getCategoryId());
         if (req.getDueDate()    != null) pe.setDueDate(req.getDueDate());
         if (req.getNotes()      != null) pe.setNotes(req.getNotes());
@@ -60,7 +67,8 @@ public class PlannedExpenseService {
     // ── Ejecutar: marca como done y crea transacción real ─
     @Transactional
     public PlannedExpense execute(Integer userId, Long id) {
-        PlannedExpense pe = getById(userId, id);
+        PlannedExpense pe = repository.lockByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Gasto planeado no encontrado"));
 
         if (!"pending".equals(pe.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El gasto ya fue ejecutado o cancelado");
@@ -89,6 +97,9 @@ public class PlannedExpenseService {
     @Transactional
     public PlannedExpense cancel(Integer userId, Long id) {
         PlannedExpense pe = getById(userId, id);
+        if (!"pending".equals(pe.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se puede cancelar un gasto pendiente");
+        }
         pe.setStatus("cancelled");
         return repository.save(pe);
     }
@@ -109,6 +120,12 @@ public class PlannedExpenseService {
     // ── Recordatorios de hoy ──────────────────────────────
     public List<PlannedExpense> getTodayReminders(Integer userId) {
         return repository.findByUserIdAndRemindAt(userId, LocalDate.now());
+    }
+
+    private void validateAmount(java.math.BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto debe ser positivo");
+        }
     }
 
     private PlannedExpense getById(Integer userId, Long id) {
