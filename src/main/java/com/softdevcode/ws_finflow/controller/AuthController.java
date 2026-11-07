@@ -39,7 +39,7 @@ public class AuthController {
         String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
         return ResponseEntity.ok(Map.of(
                 "token", token,
-                "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail())));
+                "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
     }
 
     @PostMapping("/register")
@@ -67,6 +67,8 @@ public class AuthController {
         user.setUsername(name);
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(password));
+        // El registro público nunca puede conceder permisos administrativos.
+        user.setRole("USER");
         userRepository.save(user);
         String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
         return ResponseEntity.ok(Map.of(
@@ -80,6 +82,6 @@ public class AuthController {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
         return ResponseEntity.ok(Map.of(
-                "id", user.getId(), "name", user.getUsername(), "email", user.getEmail()));
+                "id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole()));
     }
 }
