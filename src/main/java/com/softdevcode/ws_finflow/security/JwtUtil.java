@@ -4,38 +4,38 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Duration;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
+    private static final long WEB_EXPIRATION = Duration.ofHours(5).toMillis();
+    private static final long MOBILE_EXPIRATION = Duration.ofDays(30).toMillis();
+    private final Key key;
 
-    // Clave secreta segura (32+ caracteres)
-    private final String SECRET_KEY = "MiClaveSuperSecretaMuyLargaDeAlMenos32Chars!";
+    public JwtUtil(@Value("${JWT_SECRET}") String jwtSecret) {
+        if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalArgumentException("JWT_SECRET debe tener al menos 32 bytes y configurarse fuera del repositorio");
+        }
+        this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    }
 
-    private final long EXPIRATION = 1000 * 60 * 60 * 5; // 5 horas
-
-    private final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
-
-    // Generar token
     public String generateToken(String email, boolean longLived) {
-
-        long expiration = longLived
-                ? 1000L * 60 * 60 * 24 * 364  // 30 días mobile
-                : 1000L * 60 * 60 * 5;        // 5 horas web
-
+        long now = System.currentTimeMillis();
+        long expiration = longLived ? MOBILE_EXPIRATION : WEB_EXPIRATION;
         return Jwts.builder()
                 .setSubject(email)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION))
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + expiration))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // Validar token y extraer email
     public String validateTokenAndGetEmail(String token) throws Exception {
         try {
             Claims claims = Jwts.parserBuilder()
@@ -43,7 +43,7 @@ public class JwtUtil {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
-            return claims.getSubject(); // este es el email
+            return claims.getSubject();
         } catch (Exception e) {
             throw new Exception("Token inválido o expirado");
         }
