@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
-    paths:
-      - '.github/workflows/p1-web-smoke.yml'
+  schedule:
+    - cron: '15 4 * * *'
 
 permissions:
   contents: read
