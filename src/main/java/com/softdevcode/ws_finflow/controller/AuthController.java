@@ -81,7 +81,7 @@ public class AuthController {
         // El registro público nunca puede conceder permisos administrativos.
         user.setRole("USER");
         userRepository.save(user);
-        String token = jwtUtil.generateToken(user.getEmail(), false);
+        String token = jwtUtil.generateToken(user.getEmail(), false, user.getTokenVersion());
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
