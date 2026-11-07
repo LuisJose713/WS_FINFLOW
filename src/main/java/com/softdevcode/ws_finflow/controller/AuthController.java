@@ -76,7 +76,7 @@ public class AuthController {
         String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
         return ResponseEntity.ok(Map.of(
                 "token", token,
-                "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail())));
+                "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
     }
 
     @GetMapping("/me")
