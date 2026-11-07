@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.config;
 import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,9 +17,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
+    private final PrivacyConsentFilter privacyConsentFilter;
 
-    public SecurityConfig(JwtFilter jwtFilter) {
+    public SecurityConfig(JwtFilter jwtFilter, PrivacyConsentFilter privacyConsentFilter) {
         this.jwtFilter = jwtFilter;
+        this.privacyConsentFilter = privacyConsentFilter;
     }
 
     @Bean
@@ -32,12 +35,22 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/billing/catalog", "/billing/quote", "/privacy/policy").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(privacyConsentFilter, JwtFilter.class);
 
         return http.build();
+    }
+
+    // Filters run only inside Spring Security, not twice via servlet auto-registration.
+    @Bean
+    public FilterRegistrationBean<PrivacyConsentFilter> privacyFilterServletRegistration(PrivacyConsentFilter filter) {
+        FilterRegistrationBean<PrivacyConsentFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

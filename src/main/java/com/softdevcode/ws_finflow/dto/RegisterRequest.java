@@ -6,7 +6,16 @@ public class RegisterRequest {
     private String email;
     private String password;
     private String confirmPassword;
+    private Boolean privacyAccepted;
+    private String privacyVersion;
+    private Boolean marketingConsent;
 
+    public Boolean getPrivacyAccepted() { return privacyAccepted; }
+    public void setPrivacyAccepted(Boolean accepted) { this.privacyAccepted = accepted; }
+    public String getPrivacyVersion() { return privacyVersion; }
+    public void setPrivacyVersion(String version) { this.privacyVersion = version; }
+    public Boolean getMarketingConsent() { return marketingConsent; }
+    public void setMarketingConsent(Boolean consent) { this.marketingConsent = consent; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 

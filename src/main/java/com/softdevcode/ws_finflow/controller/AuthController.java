@@ -10,6 +10,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.sql.Timestamp;
 
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +25,12 @@ import java.util.Optional;
 public class AuthController {
     @Autowired private UserRepository userRepository;
     @Autowired private JwtUtil jwtUtil;
+    @Autowired private JdbcTemplate jdbc;
+    @Value("${finflow.privacy.controller-name:}") private String privacyControllerName;
+    @Value("${finflow.privacy.contact-email:}") private String privacyContactEmail;
+    @Value("${finflow.privacy.contact-address:}") private String privacyContactAddress;
+    @Value("${finflow.privacy.contact-phone:}") private String privacyContactPhone;
+    private static final String PRIVACY_VERSION = "2026-11-07-v1";
     @Autowired private com.softdevcode.ws_finflow.security.AuthRateLimiter rateLimiter;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -51,6 +63,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @Transactional
     public ResponseEntity<?> register(@RequestBody RegisterRequest request,
                                       @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType) {
         if (request == null || request.getName() == null || request.getEmail() == null || request.getPassword() == null) {
@@ -68,6 +81,16 @@ public class AuthController {
         if (request.getConfirmPassword() != null && !password.equals(request.getConfirmPassword())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Las contraseñas no coinciden"));
         }
+        if (privacyControllerName == null || privacyControllerName.isBlank()
+             || privacyContactEmail == null || privacyContactEmail.isBlank()
+             || privacyContactAddress == null || privacyContactAddress.isBlank()
+             || privacyContactPhone == null || privacyContactPhone.isBlank()) {
+            return ResponseEntity.status(503).body(Map.of("error","Política de privacidad pendiente de publicación"));
+        }
+        if (!Boolean.TRUE.equals(request.getPrivacyAccepted()) ||
+                !PRIVACY_VERSION.equals(request.getPrivacyVersion())) {
+            return ResponseEntity.badRequest().body(Map.of("error","Debes aceptar la política de tratamiento de datos vigente"));
+        }
         if (userRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "El email ya está registrado"));
         }
@@ -81,6 +104,16 @@ public class AuthController {
         // El registro público nunca puede conceder permisos administrativos.
         user.setRole("USER");
         userRepository.save(user);
+        jdbc.update("""
+            INSERT INTO privacy_consents(user_id,policy_version,marketing_opt_in,source)
+            VALUES (?,?,?,'SIGNUP')
+            """,user.getId(),PRIVACY_VERSION,Boolean.TRUE.equals(request.getMarketingConsent()));
+        Instant started = Instant.now();
+        jdbc.update("""
+            INSERT INTO billing_trials(user_id,started_at,expires_at)
+            VALUES (?,?,?) ON CONFLICT (user_id) DO NOTHING
+            """,user.getId(),Timestamp.from(started),
+                Timestamp.from(started.atZone(ZoneOffset.UTC).plusMonths(1).toInstant()));
         String token = jwtUtil.generateToken(user.getEmail(), false, user.getTokenVersion());
         return ResponseEntity.ok(Map.of(
                 "token", token,
@@ -88,6 +121,42 @@ public class AuthController {
     }
 
     public record ChangePasswordRequest(String currentPassword,String newPassword,String confirmPassword){}
+    public record ProfileUpdateRequest(String name,String email,String currentPassword){}
+
+    @PutMapping("/profile")
+    @Transactional
+    public ResponseEntity<?> updateProfile(Authentication authentication,@RequestBody ProfileUpdateRequest request) {
+        if (authentication == null) return ResponseEntity.status(401).body(Map.of("error","Sesión requerida"));
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED));
+        if (request == null || request.name() == null || request.email() == null ||
+                request.currentPassword() == null ||
+                !passwordEncoder.matches(request.currentPassword(),user.getPassword()))
+            return ResponseEntity.status(403).body(Map.of("error","Verifica tu contraseña actual"));
+        String name = request.name().trim();
+        String email = request.email().trim().toLowerCase(java.util.Locale.ROOT);
+        if (name.length() < 2 || name.length() > 80 ||
+                email.length() > 254 ||
+                !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))
+            return ResponseEntity.badRequest().body(Map.of("error","Nombre o correo inválido"));
+        if (!email.equalsIgnoreCase(user.getEmail()) &&
+                userRepository.findByEmail(email).filter(other -> !other.getId().equals(user.getId())).isPresent())
+            return ResponseEntity.status(409).body(Map.of("error","El correo ya está registrado"));
+        if (!name.equals(user.getUsername()) &&
+                userRepository.findByUsername(name).filter(other -> !other.getId().equals(user.getId())).isPresent())
+            return ResponseEntity.status(409).body(Map.of("error","El nombre ya está registrado"));
+        boolean emailChanged = !email.equalsIgnoreCase(user.getEmail());
+        // Never switch the login identity to an unverified email address.
+        if (emailChanged) return ResponseEntity.status(409).body(Map.of(
+                "error", "El correo requiere confirmación. Solicita el código de verificación primero."));
+        user.setUsername(name);
+        // Invalidate all previous sessions after any profile update.
+        user.setTokenVersion((user.getTokenVersion()==null ? 0 : user.getTokenVersion()) + 1);
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("status","updated","logoutRequired",true,
+                "emailChanged",emailChanged,"name",name,"email",email));
+    }
     public record ConfirmPasswordRequest(String password){}
 
     @PostMapping("/change-password")
