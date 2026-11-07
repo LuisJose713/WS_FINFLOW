@@ -135,11 +135,18 @@ public class BillingController {
             FROM billing_entitlements WHERE user_id = ? AND (valid_until IS NULL OR valid_until > now())
             """, user.getId());
         Map<String,Object> result = new LinkedHashMap<>();
-        result.put("planCode", rows.isEmpty() ? "FREE" : rows.get(0).get("plan_code"));
-        result.put("pro", !rows.isEmpty());
-        if (!rows.isEmpty()) {
-            result.put("validUntil", rows.get(0).get("valid_until"));
-            result.put("source", rows.get(0).get("source"));
+        List<Map<String,Object>> trials = jdbc.queryForList("""
+            SELECT expires_at FROM billing_trials WHERE user_id=? AND expires_at>now()
+            """,user.getId());
+        boolean granted = !rows.isEmpty(), trial = !trials.isEmpty();
+        result.put("planCode",granted ? rows.get(0).get("plan_code") : trial ? "TRIAL" : "FREE");
+        result.put("pro",granted || trial);
+        if (granted) {
+            result.put("validUntil",rows.get(0).get("valid_until"));
+            result.put("source",rows.get(0).get("source"));
+        } else if (trial) {
+            result.put("validUntil",trials.get(0).get("expires_at"));
+            result.put("source","FREE_TRIAL");
         }
         return result;
     }

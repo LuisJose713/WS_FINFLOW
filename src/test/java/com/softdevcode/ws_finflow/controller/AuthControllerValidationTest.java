@@ -23,6 +23,7 @@ import static org.mockito.Mockito.*;
 class AuthControllerValidationTest {
     @Mock UserRepository users;
     @Mock JwtUtil jwt;
+    @Mock org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Mock com.softdevcode.ws_finflow.security.AuthRateLimiter limiter;
     @InjectMocks AuthController controller;
 
@@ -65,6 +66,12 @@ class AuthControllerValidationTest {
         request.setName("Tester");
         request.setEmail("tester@example.com");
         request.setPassword("long-enough-password");
+        request.setPrivacyAccepted(true);
+        request.setPrivacyVersion("2026-11-07-v1");
+        org.springframework.test.util.ReflectionTestUtils.setField(controller,"privacyControllerName","FinFlow test");
+        org.springframework.test.util.ReflectionTestUtils.setField(controller,"privacyContactEmail","test@example.com");
+        org.springframework.test.util.ReflectionTestUtils.setField(controller,"privacyContactAddress","Calle 1, Colombia");
+        org.springframework.test.util.ReflectionTestUtils.setField(controller,"privacyContactPhone","3000000000");
         when(users.save(any(User.class))).thenAnswer(invocation -> {
             User saved = invocation.getArgument(0);
             saved.setId(99L);
