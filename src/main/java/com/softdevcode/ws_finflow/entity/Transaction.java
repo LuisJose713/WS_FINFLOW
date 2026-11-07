@@ -24,6 +24,9 @@
         @Column(name = "category_id")
         private Long categoryId;
 
+        @Column(name = "account_id")
+        private Long accountId;
+
         private String description;
 
         @Column(name = "date")
@@ -51,6 +54,8 @@
         public String getType() { return type; }
         public void setType(String type) { this.type = type; }
 
+        public Long getAccountId() { return accountId; }
+        public void setAccountId(Long accountId) { this.accountId = accountId; }
         public Long getCategoryId() { return categoryId; }
         public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
 

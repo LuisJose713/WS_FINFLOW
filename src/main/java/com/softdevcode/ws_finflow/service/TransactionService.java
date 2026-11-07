@@ -37,6 +37,7 @@ public class TransactionService {
     private final TransactionRepository repository;
     private final EntityManager          em;
     private final CategoryAccessValidator categoryAccessValidator;
+    private final FinancialAccountService financialAccounts;
 
     // ── Todas ─────────────────────────────────────────────
     public List<Transaction> getAll(Integer userId) {
@@ -104,7 +105,10 @@ public class TransactionService {
         tx.setDate(request.getDate() != null
                 ? request.getDate().atStartOfDay()
                 : LocalDateTime.now());
-        tx.setCurrency(request.getCurrency() != null ? request.getCurrency() : "COP");
+        String currency=request.getCurrency()!=null?request.getCurrency():"COP";
+        financialAccounts.assertOwnedAndCurrency(userId,request.getAccountId(),currency);
+        tx.setAccountId(request.getAccountId());
+        tx.setCurrency(currency);
         tx.setStatus(request.getStatus()     != null ? request.getStatus()   : "completed");
         tx.setCreatedAt(LocalDateTime.now());
         return repository.save(tx);
@@ -132,7 +136,9 @@ public class TransactionService {
         if (tx.getCategoryId() != null) categoryAccessValidator.requireVisible(userId, tx.getCategoryId(), tx.getType());
         if (request.getDescription() != null) tx.setDescription(request.getDescription());
         if (request.getDate() != null) tx.setDate(request.getDate().atStartOfDay());
+        if (request.getAccountId()!=null) tx.setAccountId(request.getAccountId());
         if (request.getCurrency() != null) tx.setCurrency(request.getCurrency());
+        financialAccounts.assertOwnedAndCurrency(userId,tx.getAccountId(),tx.getCurrency());
         if (request.getStatus() != null) tx.setStatus(request.getStatus());
         return repository.save(tx);
     }
