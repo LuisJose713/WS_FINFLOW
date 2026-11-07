@@ -66,7 +66,8 @@ public class CategoryController {
     public ResponseEntity<Void> delete(Authentication auth, @PathVariable Long id) {
         Category category = owned(owner(auth), id);
         try {
-            repository.deleteAndFlush(category);
+            repository.delete(category);
+            repository.flush();
             return ResponseEntity.noContent().build();
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
