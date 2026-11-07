@@ -98,7 +98,7 @@ public class TransactionService {
         }
         tx.setAmount(request.getAmount());
         tx.setType(request.getType());
-        categoryAccessValidator.requireVisible(userId, request.getCategoryId(), request.getType());
+        if (request.getCategoryId() != null) categoryAccessValidator.requireVisible(userId, request.getCategoryId(), request.getType());
         tx.setCategoryId(request.getCategoryId());
         tx.setDescription(request.getDescription());
         tx.setDate(request.getDate() != null
@@ -129,7 +129,7 @@ public class TransactionService {
             tx.setType(request.getType());
         }
         if (request.getCategoryId() != null) tx.setCategoryId(request.getCategoryId());
-        categoryAccessValidator.requireVisible(userId, tx.getCategoryId(), tx.getType());
+        if (tx.getCategoryId() != null) categoryAccessValidator.requireVisible(userId, tx.getCategoryId(), tx.getType());
         if (request.getDescription() != null) tx.setDescription(request.getDescription());
         if (request.getDate() != null) tx.setDate(request.getDate().atStartOfDay());
         if (request.getCurrency() != null) tx.setCurrency(request.getCurrency());
