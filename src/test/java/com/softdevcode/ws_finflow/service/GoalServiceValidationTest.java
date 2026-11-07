@@ -133,7 +133,7 @@ class GoalServiceValidationTest {
 
     @Test
     void rejectsOverfundingWithoutCreatingAContribution() {
-        when(goals.findByIdAndUserId(4L, 10L)).thenReturn(Optional.of(activeGoal()));
+        when(goals.findByIdAndUserIdForUpdate(4L, 10L)).thenReturn(Optional.of(activeGoal()));
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.addContribution(10L, 4L, contribution(801d)));
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
@@ -143,7 +143,7 @@ class GoalServiceValidationTest {
 
     @Test
     void acceptsExactRemainingBalanceAndCompletesGoal() {
-        when(goals.findByIdAndUserId(4L, 10L)).thenReturn(Optional.of(activeGoal()));
+        when(goals.findByIdAndUserIdForUpdate(4L, 10L)).thenReturn(Optional.of(activeGoal()));
         when(goals.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
         Goal updated = service.addContribution(10L, 4L, contribution(800d));
         assertEquals(1000d, updated.getCurrentAmount());
@@ -159,7 +159,7 @@ class GoalServiceValidationTest {
     void rejectsContributionToCancelledGoal() {
         Goal goal = activeGoal();
         goal.setStatus("cancelled");
-        when(goals.findByIdAndUserId(4L, 10L)).thenReturn(Optional.of(goal));
+        when(goals.findByIdAndUserIdForUpdate(4L, 10L)).thenReturn(Optional.of(goal));
         assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
                 () -> service.addContribution(10L, 4L, contribution(10d))).getStatusCode());
         verifyNoInteractions(contributions);
