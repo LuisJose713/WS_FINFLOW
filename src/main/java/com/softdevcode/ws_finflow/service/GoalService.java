@@ -33,9 +33,14 @@ public class GoalService {
 
     @Transactional
     public Goal create(Long userId, GoalRequest request) {
+        validateRequest(request, true);
+        double currentAmount = request.getCurrentAmount() != null ? request.getCurrentAmount() : 0.0;
+        if (currentAmount > request.getTargetAmount()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ahorro inicial no puede superar la meta");
+        }
         Goal goal = new Goal();
         goal.setUserId(userId);
-        goal.setTitle(request.getTitle());
+        goal.setTitle(request.getTitle().trim());
         goal.setTargetAmount(request.getTargetAmount());
         goal.setCurrentAmount(request.getCurrentAmount() != null ? request.getCurrentAmount() : 0.0);
         goal.setDeadline(request.getDeadline());
@@ -47,14 +52,55 @@ public class GoalService {
 
     @Transactional
     public Goal update(Long userId, Long id, GoalRequest request) {
+        validateRequest(request, false);
         Goal goal = getById(userId, id);
-        if (request.getTitle()         != null) goal.setTitle(request.getTitle());
+        double newTarget = request.getTargetAmount() == null ? goal.getTargetAmount() : request.getTargetAmount();
+        double newCurrent = request.getCurrentAmount() == null ? goal.getCurrentAmount() : request.getCurrentAmount();
+        if (!Double.isFinite(newTarget) || newTarget <= 0 ||
+                !Double.isFinite(newCurrent) || newCurrent < 0 || newCurrent > newTarget) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El monto ahorrado no puede superar el objetivo");
+        }
+        if (request.getTitle()         != null) goal.setTitle(request.getTitle().trim());
         if (request.getTargetAmount()  != null) goal.setTargetAmount(request.getTargetAmount());
         if (request.getCurrentAmount() != null) goal.setCurrentAmount(request.getCurrentAmount());
         if (request.getDeadline()      != null) goal.setDeadline(request.getDeadline());
         if (request.getDescription()   != null) goal.setDescription(request.getDescription());
         if (request.getStatus()        != null) goal.setStatus(request.getStatus());
         return repository.save(goal);
+    }
+
+    private void validateRequest(GoalRequest request, boolean creating) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos de la meta requeridos");
+        }
+        if (creating && (request.getTitle() == null || request.getTargetAmount() == null || request.getDeadline() == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Completa título, objetivo y fecha límite");
+        }
+        if (request.getTitle() != null) {
+            int length = request.getTitle().trim().length();
+            if (length < 2 || length > 150) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El título debe tener entre 2 y 150 caracteres");
+            }
+        }
+        if (request.getTargetAmount() != null) {
+            double amount = request.getTargetAmount();
+            if (!Double.isFinite(amount) || amount <= 0 || amount > 999_999_999_999.99) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Monto objetivo inválido");
+            }
+        }
+        if (request.getCurrentAmount() != null) {
+            double amount = request.getCurrentAmount();
+            if (!Double.isFinite(amount) || amount < 0 || amount > 999_999_999_999.99) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ahorro inicial inválido");
+            }
+        }
+        if (request.getDescription() != null && request.getDescription().length() > 255) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La descripción no puede superar 255 caracteres");
+        }
+        if (request.getStatus() != null &&
+                !List.of("active", "completed", "cancelled").contains(request.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de la meta inválido");
+        }
     }
 
     @Transactional
