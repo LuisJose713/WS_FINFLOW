@@ -8,6 +8,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.softdevcode.ws_finflow.entity.User;
+import com.softdevcode.ws_finflow.repository.UserRepository;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/planned-expenses")
@@ -17,66 +20,77 @@ public class PlannedExpenseController {
     @Autowired
     private PlannedExpenseService service;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    private Integer authenticatedUserId(Authentication authentication) {
+        Long id = userRepository.findByEmail(authentication.getName())
+                .map(User::getId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
+        return Math.toIntExact(id);
+    }
+
     // GET /planned-expenses
     @GetMapping
     public ResponseEntity<List<PlannedExpense>> getAll(
-            @RequestHeader("X-User-Id") Integer userId) {
-        return ResponseEntity.ok(service.getAll(userId));
+            Authentication authentication) {
+        return ResponseEntity.ok(service.getAll(authenticatedUserId(authentication)));
     }
 
     // POST /planned-expenses
     @PostMapping
     public ResponseEntity<PlannedExpense> create(
-            @RequestHeader("X-User-Id") Integer userId,
+            Authentication authentication,
             @RequestBody PlannedExpenseRequest req) {
-        return ResponseEntity.ok(service.create(userId, req));
+        return ResponseEntity.ok(service.create(authenticatedUserId(authentication), req));
     }
 
     // PUT /planned-expenses/{id}
     @PutMapping("/{id}")
     public ResponseEntity<PlannedExpense> update(
-            @RequestHeader("X-User-Id") Integer userId,
+            Authentication authentication,
             @PathVariable Long id,
             @RequestBody PlannedExpenseRequest req) {
-        return ResponseEntity.ok(service.update(userId, id, req));
+        return ResponseEntity.ok(service.update(authenticatedUserId(authentication), id, req));
     }
 
     // PATCH /planned-expenses/{id}/execute — marca como hecho y crea transacción
     @PatchMapping("/{id}/execute")
     public ResponseEntity<PlannedExpense> execute(
-            @RequestHeader("X-User-Id") Integer userId,
+            Authentication authentication,
             @PathVariable Long id) {
-        return ResponseEntity.ok(service.execute(userId, id));
+        return ResponseEntity.ok(service.execute(authenticatedUserId(authentication), id));
     }
 
     // PATCH /planned-expenses/{id}/cancel
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<PlannedExpense> cancel(
-            @RequestHeader("X-User-Id") Integer userId,
+            Authentication authentication,
             @PathVariable Long id) {
-        return ResponseEntity.ok(service.cancel(userId, id));
+        return ResponseEntity.ok(service.cancel(authenticatedUserId(authentication), id));
     }
 
     // DELETE /planned-expenses/{id}
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
-            @RequestHeader("X-User-Id") Integer userId,
+            Authentication authentication,
             @PathVariable Long id) {
-        service.delete(userId, id);
+        service.delete(authenticatedUserId(authentication), id);
         return ResponseEntity.noContent().build();
     }
 
     // GET /planned-expenses/overdue — gastos vencidos
     @GetMapping("/overdue")
     public ResponseEntity<List<PlannedExpense>> getOverdue(
-            @RequestHeader("X-User-Id") Integer userId) {
-        return ResponseEntity.ok(service.getOverdue(userId));
+            Authentication authentication) {
+        return ResponseEntity.ok(service.getOverdue(authenticatedUserId(authentication)));
     }
 
     // GET /planned-expenses/reminders — recordatorios de hoy
     @GetMapping("/reminders")
     public ResponseEntity<List<PlannedExpense>> getReminders(
-            @RequestHeader("X-User-Id") Integer userId) {
-        return ResponseEntity.ok(service.getTodayReminders(userId));
+            Authentication authentication) {
+        return ResponseEntity.ok(service.getTodayReminders(authenticatedUserId(authentication)));
     }
 }
