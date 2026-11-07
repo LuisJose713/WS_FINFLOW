@@ -24,6 +24,6 @@ class AuthRateLimiterTest {
 
   @Test void clearingDoesNotPassRawEmailToDatabase() {
     limiter.clear("person@example.com");
-    verify(jdbc).update(contains("DELETE FROM auth_rate_limits"),argThat(s->s.length()==64 && !s.contains("@")));
+    verify(jdbc).update(contains("DELETE FROM auth_rate_limits"),(Object)argThat((String s)->s.length()==64 && !s.contains("@")));
   }
 }
