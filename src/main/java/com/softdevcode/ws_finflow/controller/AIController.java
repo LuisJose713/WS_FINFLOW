@@ -13,7 +13,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/ai")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class AIController {
 
