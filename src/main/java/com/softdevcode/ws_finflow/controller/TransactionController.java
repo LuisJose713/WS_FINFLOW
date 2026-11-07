@@ -158,7 +158,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/transactions")
-@CrossOrigin(origins = "*")
+
 public class TransactionController {
 
     @Autowired
@@ -203,6 +203,12 @@ public class TransactionController {
             Authentication auth,
             @RequestBody TransactionRequest request) {
         return ResponseEntity.ok(service.create(getUserId(auth), request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Transaction> update(
+            Authentication auth, @PathVariable Long id, @RequestBody TransactionRequest request) {
+        return ResponseEntity.ok(service.update(getUserId(auth), id, request));
     }
 
     @DeleteMapping("/{id}")
