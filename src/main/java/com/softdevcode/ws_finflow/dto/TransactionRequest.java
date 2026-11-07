@@ -8,6 +8,7 @@ public class TransactionRequest {
     private Double amount;
     private String type;
     private Long categoryId;
+    private Long accountId;
     private String description;
     private LocalDate date;
     private String currency;
@@ -20,6 +21,8 @@ public class TransactionRequest {
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
 
+    public Long getAccountId() { return accountId; }
+    public void setAccountId(Long accountId) { this.accountId = accountId; }
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
 
