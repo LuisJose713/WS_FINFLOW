@@ -16,6 +16,8 @@ import com.softdevcode.ws_finflow.dto.TransactionFilter;
 import com.softdevcode.ws_finflow.dto.TransactionRequest;
 import com.softdevcode.ws_finflow.dto.TransactionStats;
 import com.softdevcode.ws_finflow.entity.Transaction;
+import com.softdevcode.ws_finflow.entity.Category;
+import com.softdevcode.ws_finflow.repository.CategoryRepository;
 import com.softdevcode.ws_finflow.repository.TransactionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 public class TransactionService {
 
     private final TransactionRepository repository;
+    private final CategoryRepository categoryRepository;
     private final EntityManager          em;
     private final CategoryAccessValidator categoryAccessValidator;
     private final FinancialAccountService financialAccounts;
@@ -155,62 +158,82 @@ public class TransactionService {
                 org.springframework.http.HttpStatus.NOT_FOUND, "Transacción no encontrada"));
     }
 
-    // ── Stats ─────────────────────────────────────────────
-    public TransactionStats getStats(Integer userId) {
-        List<Transaction> transactions = repository.findByUserIdOrderByDateDesc(userId);
-
-        double totalIncome = transactions.stream()
-                .filter(t -> "income".equals(t.getType()))
-                .mapToDouble(Transaction::getAmount).sum();
-
-        double totalExpenses = transactions.stream()
-                .filter(t -> "expense".equals(t.getType()))
-                .mapToDouble(Transaction::getAmount).sum();
-
-        double savingsRate = totalIncome > 0
-                ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
-
-        // Agrupar por mes "2026-03"
-        Map<String, double[]> byMonth = new TreeMap<>();
-        for (Transaction t : transactions) {
-            if (t.getDate() == null) continue;
-            String month = t.getDate().toLocalDate().toString().substring(0, 7);
-            byMonth.putIfAbsent(month, new double[]{0.0, 0.0});
-            if ("income".equals(t.getType())) byMonth.get(month)[0] += t.getAmount();
-            else byMonth.get(month)[1] += t.getAmount();
-        }
-
-        List<Map<String, Object>> monthlyData = byMonth.entrySet().stream()
-                .map(e -> {
-                    Map<String, Object> m = new java.util.LinkedHashMap<>();
-                    m.put("month", e.getKey());
-                    m.put("income", e.getValue()[0]);
-                    m.put("expenses", e.getValue()[1]);
-                    return m;
-                })
-                .collect(Collectors.toList());
-
-        return new TransactionStats(
-                totalIncome, totalExpenses,
-                totalIncome - totalExpenses, savingsRate,
-                monthlyData, List.of()
-        );
+    // ── Financial overview: completed COP operations only ──────────
+    // Keep charts consistent with monthly budgets and account balances.
+    private boolean isPostedCOP(Transaction tx) {
+        if (tx == null || tx.getAmount() == null ||
+                !Double.isFinite(tx.getAmount()) || tx.getAmount() <= 0) return false;
+        String status = tx.getStatus();
+        if (status != null && !"completed".equals(status)) return false;
+        String currency = tx.getCurrency();
+        if (currency != null && !currency.isBlank() && !"COP".equalsIgnoreCase(currency.trim())) return false;
+        return "income".equals(tx.getType()) || "expense".equals(tx.getType());
     }
-    // ── Stats mensuales ───────────────────────────────────
-    public List<MonthlyStats> getMonthlyStats(Integer userId) {
-        List<Transaction> all = repository.findByUserIdOrderByDateDesc(userId);
-        Map<String, double[]> map = new LinkedHashMap<>();
 
-        for (Transaction t : all) {
-            String key = t.getDate().getYear() + "-" + String.format("%02d", t.getDate().getMonthValue());
-            map.putIfAbsent(key, new double[]{0, 0});
-            if ("income".equals(t.getType())) map.get(key)[0] += t.getAmount();
-            else map.get(key)[1] += t.getAmount();
+    public TransactionStats getStats(Integer userId) {
+        List<Transaction> posted = repository.findByUserIdOrderByDateDesc(userId).stream()
+                .filter(this::isPostedCOP).toList();
+        double income = posted.stream().filter(t -> "income".equals(t.getType()))
+                .mapToDouble(Transaction::getAmount).sum();
+        double expenses = posted.stream().filter(t -> "expense".equals(t.getType()))
+                .mapToDouble(Transaction::getAmount).sum();
+        double savingsRate = income > 0 ? (income - expenses) / income * 100 : 0;
+
+        Map<String, double[]> months = new TreeMap<>();
+        Map<Long, String> names = new HashMap<>();
+        for (Category category : categoryRepository.findVisibleTo(userId)) {
+            if (category.getId() != null) names.put(category.getId(), category.getName());
+        }
+        Map<String, Double> spentByCategory = new HashMap<>();
+        for (Transaction tx : posted) {
+            if (tx.getDate() != null) {
+                String month = tx.getDate().toLocalDate().toString().substring(0, 7);
+                double[] total = months.computeIfAbsent(month, ignored -> new double[]{0, 0});
+                if ("income".equals(tx.getType())) total[0] += tx.getAmount();
+                else total[1] += tx.getAmount();
+            }
+            if ("expense".equals(tx.getType())) {
+                String name = tx.getCategoryId() == null
+                        ? "Sin categoría" : names.getOrDefault(tx.getCategoryId(), "Categoría eliminada");
+                spentByCategory.merge(name, tx.getAmount(), Double::sum);
+            }
         }
 
-        return map.entrySet().stream()
-                .map(e -> new MonthlyStats(e.getKey(), e.getValue()[0], e.getValue()[1]))
-                .collect(Collectors.toList());
+        List<Map<String, Object>> monthly = months.entrySet().stream()
+                .map(entry -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("month", entry.getKey());
+                    row.put("income", entry.getValue()[0]);
+                    row.put("expenses", entry.getValue()[1]);
+                    return row;
+                }).toList();
+
+        List<Map<String, Object>> categories = new ArrayList<>();
+        for (Map.Entry<String, Double> entry : spentByCategory.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed()).toList()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("category", entry.getKey());
+            row.put("amount", entry.getValue());
+            row.put("percentage", expenses > 0 ? entry.getValue() / expenses * 100 : 0.0);
+            categories.add(row);
+        }
+
+        return new TransactionStats(income, expenses, income - expenses,
+                savingsRate, monthly, categories);
+    }
+
+    public List<MonthlyStats> getMonthlyStats(Integer userId) {
+        Map<String, double[]> map = new TreeMap<>();
+        for (Transaction tx : repository.findByUserIdOrderByDateDesc(userId)) {
+            if (!isPostedCOP(tx) || tx.getDate() == null) continue;
+            String month = tx.getDate().getYear() + "-" +
+                    String.format("%02d", tx.getDate().getMonthValue());
+            double[] total = map.computeIfAbsent(month, ignored -> new double[]{0, 0});
+            if ("income".equals(tx.getType())) total[0] += tx.getAmount();
+            else total[1] += tx.getAmount();
+        }
+        return map.entrySet().stream().map(e ->
+                new MonthlyStats(e.getKey(), e.getValue()[0], e.getValue()[1])).toList();
     }
 
     // ── Exportar CSV ──────────────────────────────────────
