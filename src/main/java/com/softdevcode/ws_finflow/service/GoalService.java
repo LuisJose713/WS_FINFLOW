@@ -105,12 +105,33 @@ public class GoalService {
 
     @Transactional
     public Goal addContribution(Long userId, Long id, ContributionRequest request) {
+        if (request == null || request.getAmount() == null
+                || !Double.isFinite(request.getAmount()) || request.getAmount() <= 0
+                || request.getAmount() > 999_999_999_999.99) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El aporte debe ser un monto positivo válido");
+        }
+        if (request.getNote() != null && request.getNote().length() > 255) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La nota no puede superar 255 caracteres");
+        }
         Goal goal = getById(userId, id);
+        if (!"active".equals(goal.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo puedes aportar a metas activas");
+        }
+        if (goal.getCurrentAmount() == null || goal.getTargetAmount() == null
+                || !Double.isFinite(goal.getCurrentAmount()) || !Double.isFinite(goal.getTargetAmount())
+                || goal.getCurrentAmount() < 0 || goal.getTargetAmount() <= 0
+                || goal.getCurrentAmount() >= goal.getTargetAmount()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El saldo de la meta no permite nuevos aportes");
+        }
+        double remaining = goal.getTargetAmount() - goal.getCurrentAmount();
+        if (request.getAmount() > remaining) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El aporte supera el valor que falta para completar la meta");
+        }
 
         double newAmount = goal.getCurrentAmount() + request.getAmount();
-        goal.setCurrentAmount(Math.min(newAmount, goal.getTargetAmount()));
-
-        if (goal.getCurrentAmount() >= goal.getTargetAmount()) {
+        goal.setCurrentAmount(newAmount);
+        if (newAmount >= goal.getTargetAmount()) {
             goal.setStatus("completed");
         }
 
@@ -132,6 +153,9 @@ public class GoalService {
 
     @Transactional
     public Goal updateStatus(Long userId, Long id, String status) {
+        if (status == null || !List.of("active", "completed", "cancelled").contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado de la meta inválido");
+        }
         Goal goal = getById(userId, id);
         goal.setStatus(status);
         return repository.save(goal);
