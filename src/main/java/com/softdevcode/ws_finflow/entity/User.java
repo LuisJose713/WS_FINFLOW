@@ -26,6 +26,13 @@ public class User {
     @Getter
     @Column(name = "created_at")
     private LocalDateTime create_At;
+    @Getter @Setter
+    @Column(name = "token_version", nullable = false)
+    private Integer tokenVersion = 0;
+    @Getter @Setter
+    @Column(name = "password_changed_at")
+    private LocalDateTime passwordChangedAt;
+
     @Getter
     @Setter
     @Column(name = "role", nullable = false, length = 16)

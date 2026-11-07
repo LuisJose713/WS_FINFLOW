@@ -40,9 +40,10 @@ public class JwtFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7).trim();
             try {
-                String email = jwtUtil.validateTokenAndGetEmail(token);
+                JwtUtil.ValidatedToken identity = jwtUtil.validateToken(token);
+                String email = identity.email();
                 User user = userRepository.findByEmail(email).orElse(null);
-                if (user != null) {
+                if (user != null && identity.version() == (user.getTokenVersion()==null?0:user.getTokenVersion())) {
                     String role = "ADMIN".equals(user.getRole()) ? "ADMIN" : "USER";
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(email, null,
