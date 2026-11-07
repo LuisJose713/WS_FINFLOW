@@ -1,0 +1,62 @@
+name: FinFlow P1 production smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/p1-web-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-smoke:
+    name: Live web, API and CORS
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check public frontend is Angular, not a login/protection page
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE="https://finflow-opal-five.vercel.app"
+          status=$(curl -sSL --retry 2 --retry-all-errors --retry-delay 5 \
+            --max-time 120 -o /tmp/finflow-index.html -w '%{http_code}' "$SITE/")
+          echo "Frontend HTTP status: $status"
+          test "$status" = "200" || { echo "::error::Frontend is not publicly serving HTTP 200"; exit 1; }
+          grep -qi '<app-root' /tmp/finflow-index.html || { \
+            echo "::error::Frontend does not serve the Angular application shell"; exit 1; }
+
+      - name: Check API denies anonymous financial access
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://finflow-backend-yqhi.onrender.com"
+          status=$(curl -sS --retry 2 --retry-all-errors --retry-delay 5 \
+            --max-time 120 -o /tmp/finflow-unauthenticated -w '%{http_code}' "$API/auth/me")
+          echo "Unauthenticated /auth/me HTTP status: $status"
+          [[ "$status" = "401" || "$status" = "403" ]] || { \
+            echo "::error::Authenticated profile endpoint did not reject anonymous request"; exit 1; }
+
+      - name: Check allowed frontend origin and blocked untrusted origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://finflow-backend-yqhi.onrender.com"
+          curl -sS --retry 2 --retry-all-errors --retry-delay 5 --max-time 120 \
+            -X OPTIONS -H 'Origin: https://finflow-opal-five.vercel.app' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            -D /tmp/finflow-cors-allowed -o /dev/null "$API/auth/login"
+          grep -qi '^access-control-allow-origin: https://finflow-opal-five.vercel.app' \
+            /tmp/finflow-cors-allowed || { \
+            echo "::error::Production frontend origin is not permitted by backend CORS"; exit 1; }
+          curl -sS --max-time 120 -X OPTIONS \
+            -H 'Origin: https://untrusted.invalid' \
+            -H 'Access-Control-Request-Method: POST' \
+            -D /tmp/finflow-cors-blocked -o /dev/null "$API/auth/login"
+          if grep -qi '^access-control-allow-origin:' /tmp/finflow-cors-blocked; then
+            echo "::error::Untrusted origin unexpectedly permitted by CORS"
+            exit 1
+          fi
+          echo "CORS policy confirmed"
