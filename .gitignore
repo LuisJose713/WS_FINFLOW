@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Never commit environment or credential files
+.env
+.env.*
+!.env.example
