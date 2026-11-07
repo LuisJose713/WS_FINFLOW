@@ -70,11 +70,13 @@ public class MonthlyBudgetService {
             BigDecimal spent = spentByCategory.getOrDefault(budget.getCategoryId(), BigDecimal.ZERO.setScale(2));
             BigDecimal limit = budget.getLimitAmount();
             BigDecimal remaining = limit.subtract(spent);
+            // Floor the displayed percentage: 79.99% must not be labeled as 80%.
             BigDecimal used = spent.multiply(BigDecimal.valueOf(100))
-                    .divide(limit, 0, RoundingMode.HALF_UP);
+                    .divide(limit, 0, RoundingMode.DOWN);
             int percent = used.min(BigDecimal.valueOf(9999)).intValue();
+            // Use actual amounts, not a rounded display percentage, for alerts.
             String status = spent.compareTo(limit) > 0 ? "over"
-                    : percent >= 80 ? "near" : "ok";
+                    : spent.compareTo(limit.multiply(new BigDecimal("0.80"))) >= 0 ? "near" : "ok";
             Category category = visibleCategories.get(budget.getCategoryId());
             return new BudgetOverview(budget.getId(), budget.getCategoryId(),
                     category == null ? "Categoría" : category.getName(),
