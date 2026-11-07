@@ -16,9 +16,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
+    private final PrivacyConsentFilter privacyConsentFilter;
 
-    public SecurityConfig(JwtFilter jwtFilter) {
+    public SecurityConfig(JwtFilter jwtFilter, PrivacyConsentFilter privacyConsentFilter) {
         this.jwtFilter = jwtFilter;
+        this.privacyConsentFilter = privacyConsentFilter;
     }
 
     @Bean
@@ -32,11 +34,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/billing/catalog", "/billing/quote").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/billing/catalog", "/billing/quote", "/privacy/policy").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(privacyConsentFilter, JwtFilter.class);
 
         return http.build();
     }
