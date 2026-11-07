@@ -68,7 +68,7 @@ class CategoryControllerTest {
         when(categories.findByIdAndUserId(42L, 7)).thenReturn(Optional.empty());
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(ResponseStatusException.class,
                 () -> controller.delete(auth, 42L)).getStatusCode());
-        verify(categories, never()).deleteAndFlush(any());
+        verify(categories, never()).delete(any());
     }
 
     @Test void forbidsDuplicateCategoryNamesForSameUser() {
