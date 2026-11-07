@@ -7,110 +7,79 @@ import com.softdevcode.ws_finflow.repository.UserRepository;
 import com.softdevcode.ws_finflow.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
-import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private JwtUtil jwtUtil;
-
+    @Autowired private UserRepository userRepository;
+    @Autowired private JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    // ── Login ─────────────────────────────────────────────
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request,
-                                   @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType){
-    {
-
-
-
-            Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
-
-            if (userOpt.isEmpty()) {
-                return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
-            }
-
-            User user = userOpt.get();
-
-            // Verifica contraseña encriptada
-            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-                return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
-            }
-
-            boolean isMobile = "mobile".equalsIgnoreCase(clientType);
-            String token = jwtUtil.generateToken(user.getEmail(), isMobile);
-
-            return ResponseEntity.ok(Map.of(
-                    "token", token,
-                    "user", Map.of(
-                            "id",    user.getId(),
-                            "name",  user.getUsername(),
-                            "email", user.getEmail()
-                    )
-            ));
+                                   @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType) {
+        if (request == null || request.getEmail() == null || request.getEmail().isBlank()
+                || request.getEmail().length() > 254
+                || request.getPassword() == null || request.getPassword().isBlank()
+                || request.getPassword().length() > 128) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Solicitud inválida"));
         }
-    }
-
-    // ── Register ──────────────────────────────────────────
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request, @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType) {
-
-
-        // Verifica si el email ya existe
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            return ResponseEntity.status(409).body(Map.of("error", "El email ya está registrado"));
+        Optional<User> userOpt = userRepository.findByEmail(request.getEmail().trim());
+        if (userOpt.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOpt.get().getPassword())) {
+            // Never reveal whether an account exists.
+            return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
         }
-
-        // Verifica si el username ya existe
-        if (userRepository.findByUsername(request.getName()).isPresent()) {
-            return ResponseEntity.status(409).body(Map.of("error", "El nombre de usuario ya está en uso"));
-        }
-
-        // Encripta la contraseña
-        String hashedPassword = passwordEncoder.encode(request.getPassword());
-
-        User user = new User();
-        user.setUsername(request.getName());
-        user.setEmail(request.getEmail());
-        user.setPassword(hashedPassword);
-
-        userRepository.save(user);
-
-        // Genera token directamente — el usuario queda logueado al registrarse
-        boolean isMobile = "mobile".equalsIgnoreCase(clientType); // ← definido aquí
-        String token = jwtUtil.generateToken(user.getEmail(), isMobile);
-
+        User user = userOpt.get();
+        String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
         return ResponseEntity.ok(Map.of(
                 "token", token,
-                "user", Map.of(
-                        "id",    user.getId(),
-                        "name",  user.getUsername(),
-                        "email", user.getEmail()
-                )
-        ));
+                "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail())));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody RegisterRequest request,
+                                      @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType) {
+        if (request == null || request.getName() == null || request.getEmail() == null || request.getPassword() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Solicitud inválida"));
+        }
+        String name = request.getName().trim();
+        String email = request.getEmail().trim();
+        String password = request.getPassword();
+        if (name.length() < 2 || name.length() > 80 || email.length() > 254
+                || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+                || password.length() < 8 || password.length() > 128) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Verifica nombre, correo y contraseña (mínimo 8 caracteres)"));
+        }
+        if (userRepository.findByEmail(email).isPresent()) {
+            return ResponseEntity.status(409).body(Map.of("error", "El email ya está registrado"));
+        }
+        if (userRepository.findByUsername(name).isPresent()) {
+            return ResponseEntity.status(409).body(Map.of("error", "El nombre de usuario ya está en uso"));
+        }
+        User user = new User();
+        user.setUsername(name);
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(password));
+        userRepository.save(user);
+        String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail())));
     }
 
     @GetMapping("/me")
     public ResponseEntity<?> me(Authentication authentication) {
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
         return ResponseEntity.ok(Map.of(
-                "id",    user.getId(),
-                "name",  user.getUsername(),
-                "email", user.getEmail()
-        ));
+                "id", user.getId(), "name", user.getUsername(), "email", user.getEmail()));
     }
 }
