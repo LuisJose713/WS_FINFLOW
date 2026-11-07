@@ -69,16 +69,6 @@ public class AuthController {
         if (request == null || request.getName() == null || request.getEmail() == null || request.getPassword() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Solicitud inválida"));
         }
-        if (privacyControllerName == null || privacyControllerName.isBlank()
-             || privacyContactEmail == null || privacyContactEmail.isBlank()
-             || privacyContactAddress == null || privacyContactAddress.isBlank()
-             || privacyContactPhone == null || privacyContactPhone.isBlank()) {
-            return ResponseEntity.status(503).body(Map.of("error","Política de privacidad pendiente de publicación"));
-        }
-        if (!Boolean.TRUE.equals(request.getPrivacyAccepted()) ||
-                !PRIVACY_VERSION.equals(request.getPrivacyVersion())) {
-            return ResponseEntity.badRequest().body(Map.of("error","Debes aceptar la política de tratamiento de datos vigente"));
-        }
         String name = request.getName().trim();
         String email = request.getEmail().trim();
         String password = request.getPassword();
@@ -90,6 +80,16 @@ public class AuthController {
         }
         if (request.getConfirmPassword() != null && !password.equals(request.getConfirmPassword())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Las contraseñas no coinciden"));
+        }
+        if (privacyControllerName == null || privacyControllerName.isBlank()
+             || privacyContactEmail == null || privacyContactEmail.isBlank()
+             || privacyContactAddress == null || privacyContactAddress.isBlank()
+             || privacyContactPhone == null || privacyContactPhone.isBlank()) {
+            return ResponseEntity.status(503).body(Map.of("error","Política de privacidad pendiente de publicación"));
+        }
+        if (!Boolean.TRUE.equals(request.getPrivacyAccepted()) ||
+                !PRIVACY_VERSION.equals(request.getPrivacyVersion())) {
+            return ResponseEntity.badRequest().body(Map.of("error","Debes aceptar la política de tratamiento de datos vigente"));
         }
         if (userRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "El email ya está registrado"));

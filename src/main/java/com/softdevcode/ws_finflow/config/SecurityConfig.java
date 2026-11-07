@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.config;
 import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -42,6 +43,14 @@ public class SecurityConfig {
                 .addFilterAfter(privacyConsentFilter, JwtFilter.class);
 
         return http.build();
+    }
+
+    // Filters run only inside Spring Security, not twice via servlet auto-registration.
+    @Bean
+    public FilterRegistrationBean<PrivacyConsentFilter> privacyFilterServletRegistration(PrivacyConsentFilter filter) {
+        FilterRegistrationBean<PrivacyConsentFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
