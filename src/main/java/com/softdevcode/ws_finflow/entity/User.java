@@ -26,6 +26,14 @@ public class User {
     @Getter
     @Column(name = "created_at")
     private LocalDateTime create_At;
+    @Setter
+    @Column(name = "role", nullable = false)
+    private String role = "USER";
+
+    public String getRole() {
+        return role == null ? "USER" : role;
+    }
+
     @PrePersist
     public void prePersist() {
         this.create_At = LocalDateTime.now();
