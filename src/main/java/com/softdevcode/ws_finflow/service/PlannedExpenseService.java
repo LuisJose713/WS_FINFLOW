@@ -22,6 +22,7 @@ public class PlannedExpenseService {
 
     private final PlannedExpenseRepository repository;
     private final TransactionRepository    transactionRepository;
+    private final CategoryAccessValidator  categoryAccessValidator;
 
     // ── Obtener todos ─────────────────────────────────────
     public List<PlannedExpense> getAll(Integer userId) {
@@ -36,6 +37,7 @@ public class PlannedExpenseService {
         pe.setTitle(req.getTitle());
         validateAmount(req.getAmount());
         pe.setAmount(req.getAmount());
+        if (req.getCategoryId() != null) categoryAccessValidator.requireVisible(userId, req.getCategoryId(), "expense");
         pe.setCategoryId(req.getCategoryId());
         pe.setDueDate(req.getDueDate());
         pe.setNotes(req.getNotes());
@@ -57,7 +59,10 @@ public class PlannedExpenseService {
             validateAmount(req.getAmount());
             pe.setAmount(req.getAmount());
         }
-        if (req.getCategoryId() != null) pe.setCategoryId(req.getCategoryId());
+        if (req.getCategoryId() != null) {
+            categoryAccessValidator.requireVisible(userId, req.getCategoryId(), "expense");
+            pe.setCategoryId(req.getCategoryId());
+        }
         if (req.getDueDate()    != null) pe.setDueDate(req.getDueDate());
         if (req.getNotes()      != null) pe.setNotes(req.getNotes());
         if (req.getRemindAt()   != null) pe.setRemindAt(req.getRemindAt());
