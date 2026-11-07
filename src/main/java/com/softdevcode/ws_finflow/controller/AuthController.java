@@ -36,7 +36,8 @@ public class AuthController {
             return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
         }
         User user = userOpt.get();
-        String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
+        // Mobile TTL must not be granted based on an untrusted client-supplied header.
+        String token = jwtUtil.generateToken(user.getEmail(), false);
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
@@ -73,7 +74,7 @@ public class AuthController {
         // El registro público nunca puede conceder permisos administrativos.
         user.setRole("USER");
         userRepository.save(user);
-        String token = jwtUtil.generateToken(user.getEmail(), "mobile".equalsIgnoreCase(clientType));
+        String token = jwtUtil.generateToken(user.getEmail(), false);
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));

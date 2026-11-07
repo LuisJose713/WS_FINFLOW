@@ -57,4 +57,24 @@ class AuthControllerValidationTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         verifyNoInteractions(users, jwt);
     }
+
+    @Test
+    void ignoresSpoofedMobileHeaderDuringPublicRegistration() {
+        RegisterRequest request = new RegisterRequest();
+        request.setName("Tester");
+        request.setEmail("tester@example.com");
+        request.setPassword("long-enough-password");
+        when(users.save(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            saved.setId(99L);
+            return saved;
+        });
+        when(jwt.generateToken("tester@example.com", false)).thenReturn("short-lived-jwt");
+
+        ResponseEntity<?> response = controller.register(request, "mobile");
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(jwt).generateToken("tester@example.com", false);
+        verify(jwt, never()).generateToken(anyString(), eq(true));
+    }
 }
