@@ -37,7 +37,7 @@ public class PlannedExpenseService {
         pe.setTitle(req.getTitle());
         validateAmount(req.getAmount());
         pe.setAmount(req.getAmount());
-        categoryAccessValidator.requireVisible(userId, req.getCategoryId(), "expense");
+        if (req.getCategoryId() != null) categoryAccessValidator.requireVisible(userId, req.getCategoryId(), "expense");
         pe.setCategoryId(req.getCategoryId());
         pe.setDueDate(req.getDueDate());
         pe.setNotes(req.getNotes());
