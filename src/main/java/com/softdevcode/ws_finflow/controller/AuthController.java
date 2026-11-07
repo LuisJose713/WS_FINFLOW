@@ -147,8 +147,10 @@ public class AuthController {
                 userRepository.findByUsername(name).filter(other -> !other.getId().equals(user.getId())).isPresent())
             return ResponseEntity.status(409).body(Map.of("error","El nombre ya está registrado"));
         boolean emailChanged = !email.equalsIgnoreCase(user.getEmail());
+        // Never switch the login identity to an unverified email address.
+        if (emailChanged) return ResponseEntity.status(409).body(Map.of(
+                "error", "El correo requiere confirmación. Solicita el código de verificación primero."));
         user.setUsername(name);
-        user.setEmail(email);
         // Invalidate all previous sessions after any profile update.
         user.setTokenVersion((user.getTokenVersion()==null ? 0 : user.getTokenVersion()) + 1);
         userRepository.save(user);

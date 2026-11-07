@@ -33,6 +33,8 @@ public class PrivacyConsentFilter extends OncePerRequestFilter {
               || path.equals("/auth/register")
               || path.equals("/auth/me")
               || path.equals("/auth/change-password")
+              || path.equals("/auth/profile-email/request")
+              || path.equals("/auth/profile-email/confirm")
               || path.equals("/auth/revoke-sessions")
               || path.equals("/billing/catalog")
               || path.equals("/billing/quote")
