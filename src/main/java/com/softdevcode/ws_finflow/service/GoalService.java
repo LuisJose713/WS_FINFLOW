@@ -113,7 +113,8 @@ public class GoalService {
         if (request.getNote() != null && request.getNote().length() > 255) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La nota no puede superar 255 caracteres");
         }
-        Goal goal = getById(userId, id);
+        Goal goal = repository.findByIdAndUserIdForUpdate(id, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meta no encontrada"));
         if (!"active".equals(goal.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo puedes aportar a metas activas");
         }
