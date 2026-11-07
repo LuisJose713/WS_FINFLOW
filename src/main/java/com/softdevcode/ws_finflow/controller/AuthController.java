@@ -38,14 +38,14 @@ public class AuthController {
             Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
 
             if (userOpt.isEmpty()) {
-                return ResponseEntity.status(401).body(Map.of("error", "Usuario no existe"));
+                return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
             }
 
             User user = userOpt.get();
 
             // Verifica contraseña encriptada
             if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-                return ResponseEntity.status(401).body(Map.of("error", "Contraseña incorrecta"));
+                return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
             }
 
             boolean isMobile = "mobile".equalsIgnoreCase(clientType);
