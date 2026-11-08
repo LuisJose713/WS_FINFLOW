@@ -36,6 +36,32 @@ class JwtUtilTest {
     }
 
     @Test
+    void tokenRemainsValidAcrossServiceRecreationWithSameSecret() throws Exception {
+        JwtUtil beforeDeployment = new JwtUtil(KEY);
+        String existingSession = beforeDeployment.generateToken("owner@example.com", false, 3);
+
+        // Simulate a new application instance after deploying an unrelated feature.
+        JwtUtil afterDeployment = new JwtUtil(KEY);
+        assertEquals("owner@example.com", afterDeployment.validateToken(existingSession).email());
+        assertEquals(3, afterDeployment.validateToken(existingSession).version());
+    }
+
+    @Test
+    void acceptsPreviouslyIssuedTokenWithoutVersionClaim() throws Exception {
+        String legacyToken = Jwts.builder()
+                .setSubject("owner@example.com")
+                .setIssuedAt(new Date(System.currentTimeMillis() - 1000))
+                .setExpiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(KEY.getBytes(StandardCharsets.UTF_8)),
+                        io.jsonwebtoken.SignatureAlgorithm.HS256)
+                .compact();
+
+        JwtUtil afterDeployment = new JwtUtil(KEY);
+        assertEquals("owner@example.com", afterDeployment.validateToken(legacyToken).email());
+        assertEquals(0, afterDeployment.validateToken(legacyToken).version());
+    }
+
+    @Test
     void usesFiveHoursForWebAndThirtyDaysForMobile() {
         JwtUtil jwt = new JwtUtil(KEY);
         Date webExpiration = Jwts.parserBuilder()
