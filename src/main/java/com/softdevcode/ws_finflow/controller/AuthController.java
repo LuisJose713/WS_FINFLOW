@@ -10,6 +10,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.sql.Timestamp;
 
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +24,7 @@ import java.util.Optional;
 public class AuthController {
     @Autowired private UserRepository userRepository;
     @Autowired private JwtUtil jwtUtil;
+    @Autowired private JdbcTemplate jdbc;
     @Autowired private com.softdevcode.ws_finflow.security.AuthRateLimiter rateLimiter;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -51,6 +57,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @Transactional
     public ResponseEntity<?> register(@RequestBody RegisterRequest request,
                                       @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType) {
         if (request == null || request.getName() == null || request.getEmail() == null || request.getPassword() == null) {
@@ -81,6 +88,13 @@ public class AuthController {
         // El registro público nunca puede conceder permisos administrativos.
         user.setRole("USER");
         userRepository.save(user);
+        // Grant one free month of Pro on first registration; no payment or auto-renewal.
+        Instant trialStart = Instant.now();
+        jdbc.update("""
+            INSERT INTO billing_trials(user_id,started_at,expires_at)
+            VALUES (?,?,?) ON CONFLICT (user_id) DO NOTHING
+            """, user.getId(), Timestamp.from(trialStart),
+                Timestamp.from(trialStart.atZone(ZoneOffset.UTC).plusMonths(1).toInstant()));
         String token = jwtUtil.generateToken(user.getEmail(), false, user.getTokenVersion());
         return ResponseEntity.ok(Map.of(
                 "token", token,
