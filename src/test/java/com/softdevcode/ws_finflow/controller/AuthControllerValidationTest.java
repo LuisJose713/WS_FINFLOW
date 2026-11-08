@@ -23,6 +23,7 @@ import static org.mockito.Mockito.*;
 class AuthControllerValidationTest {
     @Mock UserRepository users;
     @Mock JwtUtil jwt;
+    @Mock org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Mock com.softdevcode.ws_finflow.security.AuthRateLimiter limiter;
     @InjectMocks AuthController controller;
 
@@ -76,6 +77,8 @@ class AuthControllerValidationTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(jwt).generateToken("tester@example.com", false, 0);
+        verify(jdbc).update(contains("INSERT INTO billing_trials"), eq(99L),
+                any(java.sql.Timestamp.class), any(java.sql.Timestamp.class));
         verify(jwt, never()).generateToken(anyString(), eq(true), anyInt());
     }
 }
