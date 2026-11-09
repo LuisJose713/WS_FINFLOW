@@ -1,0 +1,65 @@
+name: Railway API smoke test
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  railway-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify public Railway API and CORS
+        shell: bash
+        env:
+          API: https://finflow-backend-production.up.railway.app
+        run: |
+          set -euo pipefail
+          check() {
+            local label="$1" expected="$2" url="$3"
+            local status
+            status=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors \
+              --connect-timeout 12 --max-time 40 \
+              -o /tmp/finflow-smoke-response -w '%{http_code}' "$url") || {
+              echo "::error::No response from $label"
+              exit 1
+            }
+            echo "$label returned HTTP $status"
+            test "$status" = "$expected"
+          }
+
+          check "Health" 200 "$API/actuator/health"
+          grep -q '"status":"UP"' /tmp/finflow-smoke-response || {
+            echo "::error::Health response is not UP"; exit 1;
+          }
+          check "Public billing catalog" 200 "$API/billing/catalog"
+
+          # 401 is expected and curl's -f must not treat it as a transport failure.
+          status=$(curl -sS --retry 3 --retry-delay 3 --connect-timeout 12 \
+            --max-time 40 -o /dev/null -w '%{http_code}' "$API/auth/me")
+          echo "Anonymous auth/me returned HTTP $status"
+          test "$status" = "401" || {
+            echo "::error::Anonymous financial account access not denied"; exit 1;
+          }
+
+          curl -sS --retry 3 --retry-delay 3 --max-time 40 -X OPTIONS \
+            -H 'Origin: https://finflow-opal-five.vercel.app' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            -D /tmp/finflow-cors-allowed -o /dev/null "$API/auth/login"
+          grep -qi '^access-control-allow-origin: https://finflow-opal-five.vercel.app' \
+            /tmp/finflow-cors-allowed || {
+            echo "::error::Production Vercel origin not allowed"; exit 1;
+          }
+          curl -sS --max-time 40 -X OPTIONS \
+            -H 'Origin: https://untrusted.invalid' \
+            -H 'Access-Control-Request-Method: POST' \
+            -D /tmp/finflow-cors-blocked -o /dev/null "$API/auth/login"
+          if grep -qi '^access-control-allow-origin:' /tmp/finflow-cors-blocked; then
+            echo "::error::Untrusted origin allowed"; exit 1;
+          fi
+          echo "Railway API smoke test passed"
