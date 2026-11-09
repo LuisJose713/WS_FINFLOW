@@ -94,7 +94,7 @@ public class PrivacyController {
     public Map<String, Object> marketing(Authentication authentication,
                                          @RequestBody MarketingRequest request) {
         User user = actor(authentication);
-        ensurePolicyPublished();
+        // Withdrawal remains available even when a publication flag is turned off.
         if (request == null || request.marketingConsent() == null)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Elige si quieres comunicaciones comerciales");
         boolean choice = request.marketingConsent();
