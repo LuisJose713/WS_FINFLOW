@@ -24,6 +24,7 @@ class AuthControllerValidationTest {
     @Mock UserRepository users;
     @Mock JwtUtil jwt;
     @Mock org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Mock com.softdevcode.ws_finflow.config.PrivacyPolicySettings privacySettings;
     @Mock com.softdevcode.ws_finflow.security.AuthRateLimiter limiter;
     @InjectMocks AuthController controller;
 
