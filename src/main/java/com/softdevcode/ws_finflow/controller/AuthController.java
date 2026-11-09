@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.controller;
 
 import com.softdevcode.ws_finflow.dto.LoginRequest;
+import com.softdevcode.ws_finflow.config.PrivacyPolicySettings;
 import com.softdevcode.ws_finflow.dto.RegisterRequest;
 import com.softdevcode.ws_finflow.entity.User;
 import com.softdevcode.ws_finflow.repository.UserRepository;
@@ -25,6 +26,7 @@ public class AuthController {
     @Autowired private UserRepository userRepository;
     @Autowired private JwtUtil jwtUtil;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private PrivacyPolicySettings privacySettings;
     @Autowired private com.softdevcode.ws_finflow.security.AuthRateLimiter rateLimiter;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -75,6 +77,15 @@ public class AuthController {
         if (request.getConfirmPassword() != null && !password.equals(request.getConfirmPassword())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Las contraseñas no coinciden"));
         }
+        // The legal policy must be independently approved before we enforce
+        // versioned consent. During rollout, existing registration stays available.
+        // Once published, refusal or absent consent blocks registration.
+        if (privacySettings.ready() &&
+                (!Boolean.TRUE.equals(request.getPrivacyAccepted()) ||
+                 !PrivacyPolicySettings.VERSION.equals(request.getPrivacyVersion()))) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Debes autorizar expresamente la política de tratamiento vigente"));
+        }
         if (userRepository.findByEmail(email).isPresent()) {
             return ResponseEntity.status(409).body(Map.of("error", "El email ya está registrado"));
         }
@@ -88,6 +99,17 @@ public class AuthController {
         // El registro público nunca puede conceder permisos administrativos.
         user.setRole("USER");
         userRepository.save(user);
+        if (privacySettings.ready()) {
+            boolean marketing = Boolean.TRUE.equals(request.getMarketingConsent());
+            jdbc.update("""
+                    INSERT INTO privacy_consents(user_id,policy_version,marketing_opt_in,source)
+                    VALUES (?,?,?,'SIGNUP')
+                    """, user.getId(), PrivacyPolicySettings.VERSION, marketing);
+            jdbc.update("""
+                    INSERT INTO privacy_marketing_events(user_id,policy_version,marketing_opt_in,source)
+                    VALUES (?,?,?,'SIGNUP')
+                    """, user.getId(), PrivacyPolicySettings.VERSION, marketing);
+        }
         // Grant one free month of Pro on first registration; no payment or auto-renewal.
         Instant trialStart = Instant.now();
         jdbc.update("""
