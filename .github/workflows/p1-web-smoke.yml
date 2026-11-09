@@ -38,6 +38,27 @@ jobs:
           [[ "$status" = "401" || "$status" = "403" ]] || { \
             echo "::error::Authenticated profile endpoint did not reject anonymous request"; exit 1; }
 
+      - name: Check public versioned privacy policy and deny anonymous receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://finflow-backend-production.up.railway.app"
+          status=$(curl -sS --retry 3 --retry-all-errors --max-time 60 \
+            -o /tmp/finflow-privacy-policy -w '%{http_code}' "$API/privacy/policy")
+          test "$status" = "200" || { echo "::error::Privacy policy endpoint is not public"; exit 1; }
+          python3 - <<'PY'
+          import json
+          with open('/tmp/finflow-privacy-policy',encoding='utf-8') as f:
+              policy=json.load(f)
+          assert policy.get('version') == '2026-11-09-v1', policy
+          assert isinstance(policy.get('ready'), bool), policy
+          print('Versioned privacy policy reachable; legal readiness:',policy['ready'])
+          PY
+          status=$(curl -sS --max-time 45 -o /dev/null -w '%{http_code}' "$API/privacy/status")
+          [[ "$status" = "401" || "$status" = "403" ]] || {
+            echo "::error::Anonymous privacy status unexpectedly accessible"; exit 1;
+          }
+
       - name: Check allowed frontend origin and blocked untrusted origin
         shell: bash
         run: |
