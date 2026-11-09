@@ -42,7 +42,7 @@ jobs:
           status=$(curl -sS --retry 3 --retry-delay 3 --connect-timeout 12 \
             --max-time 40 -o /dev/null -w '%{http_code}' "$API/auth/me")
           echo "Anonymous auth/me returned HTTP $status"
-          test "$status" = "401" || {
+          [[ "$status" = "401" || "$status" = "403" ]] || {
             echo "::error::Anonymous financial account access not denied"; exit 1;
           }
 
