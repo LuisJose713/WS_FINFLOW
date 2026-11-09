@@ -149,7 +149,7 @@ public class PrivacyController {
                 "La política aún no está legalmente publicada");
     }
 
-    private void recordMarketingChoice(Integer userId, boolean optIn, String source) {
+    private void recordMarketingChoice(Long userId, boolean optIn, String source) {
         jdbc.update("""
              INSERT INTO privacy_marketing_events(user_id, policy_version, marketing_opt_in, source)
              VALUES (?, ?, ?, ?)
