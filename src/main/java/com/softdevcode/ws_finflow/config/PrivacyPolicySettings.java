@@ -15,6 +15,7 @@ public class PrivacyPolicySettings {
 
     @Value("${FINFLOW_PRIVACY_PUBLISHED:false}") private boolean published;
     @Value("${FINFLOW_PRIVACY_CONTROLLER_NAME:}") private String controllerName;
+    @Value("${FINFLOW_PRIVACY_CONTROLLER_NIT:}") private String controllerNit;
     @Value("${FINFLOW_PRIVACY_CONTACT_EMAIL:}") private String contactEmail;
     @Value("${FINFLOW_PRIVACY_CONTACT_ADDRESS:}") private String contactAddress;
     @Value("${FINFLOW_PRIVACY_CONTACT_PHONE:}") private String contactPhone;
@@ -28,6 +29,7 @@ public class PrivacyPolicySettings {
     }
 
     public String controllerName() { return controllerName == null ? "" : controllerName; }
+    public String controllerNit() { return controllerNit == null ? "" : controllerNit; }
     public String contactEmail() { return contactEmail == null ? "" : contactEmail; }
     public String contactAddress() { return contactAddress == null ? "" : contactAddress; }
     public String contactPhone() { return contactPhone == null ? "" : contactPhone; }
