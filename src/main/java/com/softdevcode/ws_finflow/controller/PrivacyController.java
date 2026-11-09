@@ -3,7 +3,6 @@ package com.softdevcode.ws_finflow.controller;
 import com.softdevcode.ws_finflow.config.PrivacyPolicySettings;
 import com.softdevcode.ws_finflow.entity.User;
 import com.softdevcode.ws_finflow.repository.UserRepository;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
