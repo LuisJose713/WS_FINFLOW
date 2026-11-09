@@ -39,6 +39,7 @@ public class PrivacyController {
         response.put("effectiveDate", PrivacyPolicySettings.EFFECTIVE_DATE);
         response.put("ready", settings.ready());
         response.put("controllerName", settings.controllerName());
+        response.put("controllerNit", settings.controllerNit());
         response.put("contactEmail", settings.contactEmail());
         response.put("contactAddress", settings.contactAddress());
         response.put("contactPhone", settings.contactPhone());
