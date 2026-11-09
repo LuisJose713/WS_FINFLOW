@@ -19,7 +19,8 @@ La Ley 1581 de 2012 exige identificación, medios de contacto, finalidades y pru
 
 | Variable | Descripción |
 | --- | --- |
-| `FINFLOW_PRIVACY_CONTROLLER_NAME` | Razón social o nombre legal del responsable verificado |
+| `FINFLOW_PRIVACY_CONTROLLER_NAME` | Razón social vigente del responsable; no confundir marca AEVQOR con razón social aún no inscrita |
+| `FINFLOW_PRIVACY_CONTROLLER_NIT` | NIT declarado del responsable, sin inventar dígito de verificación |
 | `FINFLOW_PRIVACY_CONTACT_EMAIL` | Correo real y atendido para ejercer derechos |
 | `FINFLOW_PRIVACY_CONTACT_ADDRESS` | Domicilio / dirección de notificaciones del responsable |
 | `FINFLOW_PRIVACY_CONTACT_PHONE` | Teléfono verificable |
@@ -51,3 +52,5 @@ Tablas `privacy_consents` y `privacy_rights_requests` ya existían en producció
 - Las solicitudes se registran para tratamiento humano; no hay borrado ni respuesta por correo automáticos.
 - La política publicada debe precisar conservación, subencargados, transferencias y canal de atención.
 - No activar el flag de publicación sin una revisión legal y pruebas de extremo a extremo.
+
+Identidad aportada por titular: SoftDevCode S.A.S. — NIT 901796447, marca de producto AEVQOR / FinFlow. Verificar en RUES antes de la aprobación jurídica. No reemplazar la razón social con AEVQOR S.A.S. sin cambio inscrito.
