@@ -42,8 +42,8 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(authIpRateLimitFilter, JwtFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(authIpRateLimitFilter, JwtFilter.class)
                 .addFilterAfter(privacyFilter, JwtFilter.class);
 
         return http.build();
