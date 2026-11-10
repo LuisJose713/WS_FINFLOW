@@ -38,7 +38,11 @@ public class AIController {
             Authentication auth,
             @RequestParam String descripcion,
             @RequestParam Double monto) {
-        return ResponseEntity.ok(aiService.getMetaAhorro(getUserId(auth), descripcion, monto));
+        if (descripcion == null || descripcion.isBlank() || descripcion.length() > 240 ||
+                monto == null || !Double.isFinite(monto) || monto <= 0 || monto > 1_000_000_000_000.0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Descripción o monto inválidos"));
+        }
+        return ResponseEntity.ok(aiService.getMetaAhorro(getUserId(auth), descripcion.trim(), monto));
     }
 
     // POST /ai/chat — chat financiero
@@ -47,10 +51,11 @@ public class AIController {
     public ResponseEntity<?> chat(
             Authentication auth,
             @RequestBody Map<String, Object> body) {  // ← Object, no String
-        String mensaje = (String) body.get("mensaje");
-        if (mensaje == null || mensaje.isBlank())
-            return ResponseEntity.badRequest().build();
-        return ResponseEntity.ok(aiService.chat(getUserId(auth), mensaje));
+        // Reject unexpected JSON types and oversized input before invoking the AI service.
+        Object rawMessage = body == null ? null : body.get("mensaje");
+        if (!(rawMessage instanceof String mensaje) || mensaje.isBlank() || mensaje.length() > 4096)
+            return ResponseEntity.badRequest().body(Map.of("error", "Mensaje inválido (máximo 4096 caracteres)"));
+        return ResponseEntity.ok(aiService.chat(getUserId(auth), mensaje.trim()));
     }
     // GET /ai/health — verifica que FastAPI esté up
     @GetMapping("/health")
