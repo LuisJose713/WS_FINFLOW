@@ -4,6 +4,7 @@ import com.softdevcode.ws_finflow.entity.User;
 import com.softdevcode.ws_finflow.repository.UserRepository;
 import com.softdevcode.ws_finflow.security.VaultEnvelopeValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
@@ -25,6 +26,7 @@ import java.util.UUID;
  * authenticated AES-256-GCM encryption and the legacy plaintext migration is verified.
  */
 @RestController
+@ConditionalOnProperty(name = "finflow.private-vault.enabled", havingValue = "true")
 @RequestMapping("/private-vault/entries")
 @RequiredArgsConstructor
 public class PrivateVaultController {
