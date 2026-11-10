@@ -37,7 +37,7 @@ jobs:
       SPRING_JPA_HIBERNATE_DDL_AUTO: create-drop
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
