@@ -27,6 +27,31 @@ jobs:
           grep -qi '<app-root' /tmp/finflow-index.html || { \
             echo "::error::Frontend does not serve the Angular application shell"; exit 1; }
 
+      - name: Measure first and immediate follow-up API latency (no retries)
+        shell: bash
+        env:
+          API: https://finflow-backend-production.up.railway.app
+        run: |
+          set -euo pipefail
+          for sample in first second; do
+            # No -f: anonymous /auth/me must return 401 or 403.
+            # Do not retry: a timeout must never look like a passing smoke test.
+            result=$(curl -sS --retry 0 --connect-timeout 4 --max-time 8 \
+              -o /dev/null -w '%{http_code} %{time_total}' "$API/auth/me") || {
+              echo "::error::No HTTP response on $sample API request"
+              exit 1
+            }
+            read -r status elapsed <<< "$result"
+            echo "$sample request: HTTP $status in ${elapsed}s"
+            [[ "$status" = "401" || "$status" = "403" ]] || {
+              echo "::error::Anonymous /auth/me returned unexpected HTTP $status"
+              exit 1
+            }
+            awk -v duration="$elapsed" 'BEGIN { exit !(duration < 5) }' || {
+              echo "::error::$sample API request exceeded 5-second latency budget"
+              exit 1
+            }
+          done
       - name: Check API denies anonymous financial access
         shell: bash
         run: |

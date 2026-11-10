@@ -3,6 +3,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -18,6 +19,9 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final PrivacyConsentFilter privacyFilter;
+
+    @Value("${FINFLOW_CORS_ALLOWED_ORIGINS:https://finflow-opal-five.vercel.app}")
+    private String allowedOrigins;
 
     public SecurityConfig(JwtFilter jwtFilter, PrivacyConsentFilter privacyFilter) {
         this.jwtFilter = jwtFilter;
@@ -36,7 +40,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/billing/catalog", "/billing/quote", "/privacy/policy", "/actuator/health", "/actuator/health/**").permitAll()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -56,11 +60,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:4200",
-                "https://finflow-opal-five.vercel.app",
-                "https://finflow-*-ers-projects-59988892.vercel.app"
-        ));
+        // Production only trusts explicitly configured origins. No wildcard preview domains.
+        // Temporary QA domains must be supplied deliberately as comma-separated values.
+        List<String> allowed = java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        config.setAllowedOrigins(allowed);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Client-Type", "X-Requested-With"));
         config.setAllowCredentials(false);
