@@ -33,3 +33,21 @@
 - An admin cannot decrypt ciphertext without a user's recovery key.
 - Existing logins and active sessions remain valid; users receive an E2EE recovery-key enrollment flow.
 - Functional parity (web/iOS/Android) and offline use, conflict resolution, tests and rollback are demonstrated.
+
+
+## Release safety switch (2026-11-10)
+
+The experimental controller is guarded with Spring property `finflow.private-vault.enabled`.
+Its default is **false**. In QA only, after applying the SQL migration, set
+`FINFLOW_PRIVATEVAULT_ENABLED=true` (Spring Boot relaxed binding) to enable it.
+Do not set that flag on production during the experimental stage.
+
+The web, iOS/macOS and Android branches now include ciphertext-only sync clients.
+These clients are intentionally NOT yet wired to transactions, goals, accounts,
+budgets, planned expenses, recurring jobs or analytics. They do not encrypt
+existing rows, do not modify the live app, and must remain draft PRs until the
+user-controlled recovery-key enrollment and migration are validated end-to-end.
+
+**Do not claim full database encryption because the E2EE API builds.**
+The release is complete only when old plaintext financial rows, backups and
+other residual copies are accounted for and the database read audit passes.
