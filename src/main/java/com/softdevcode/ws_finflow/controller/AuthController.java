@@ -29,6 +29,10 @@ public class AuthController {
     @Autowired private PrivacyPolicySettings privacySettings;
     @Autowired private com.softdevcode.ws_finflow.security.AuthRateLimiter rateLimiter;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    // Matching a dummy hash makes unknown-user and wrong-password paths perform
+    // comparable BCrypt work; user existence must not be inferable from timing.
+    private final String nonExistentUserHash = passwordEncoder.encode(
+            "FinFlow-not-an-account-" + java.util.UUID.randomUUID());
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request,
@@ -44,7 +48,9 @@ public class AuthController {
             return ResponseEntity.status(429).body(Map.of("error","Demasiados intentos. Prueba más tarde."));
         }
         Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
-        if (userOpt.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOpt.get().getPassword())) {
+        String passwordHash = userOpt.map(User::getPassword).orElse(nonExistentUserHash);
+        boolean passwordMatches = passwordEncoder.matches(request.getPassword(), passwordHash);
+        if (userOpt.isEmpty() || !passwordMatches) {
             // Do not disclose whether the account exists. Throttle by a hashed identifier.
             rateLimiter.recordFailure(normalizedEmail);
             return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
