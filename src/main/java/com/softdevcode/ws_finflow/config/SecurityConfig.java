@@ -18,10 +18,13 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final PrivacyConsentFilter privacyFilter;
+    private final AuthIpRateLimitFilter authIpRateLimitFilter;
 
-    public SecurityConfig(JwtFilter jwtFilter, PrivacyConsentFilter privacyFilter) {
+    public SecurityConfig(JwtFilter jwtFilter, PrivacyConsentFilter privacyFilter,
+                          AuthIpRateLimitFilter authIpRateLimitFilter) {
         this.jwtFilter = jwtFilter;
         this.privacyFilter = privacyFilter;
+        this.authIpRateLimitFilter = authIpRateLimitFilter;
     }
 
     @Bean
@@ -40,6 +43,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(authIpRateLimitFilter, JwtFilter.class)
                 .addFilterAfter(privacyFilter, JwtFilter.class);
 
         return http.build();
@@ -49,6 +53,14 @@ public class SecurityConfig {
     @Bean
     public FilterRegistrationBean<PrivacyConsentFilter> privacyFilterRegistration(PrivacyConsentFilter filter) {
         FilterRegistrationBean<PrivacyConsentFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    // Ensure this filter is only invoked within the Spring Security chain.
+    @Bean
+    public FilterRegistrationBean<AuthIpRateLimitFilter> authIpRateLimitRegistration(AuthIpRateLimitFilter filter) {
+        FilterRegistrationBean<AuthIpRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }
