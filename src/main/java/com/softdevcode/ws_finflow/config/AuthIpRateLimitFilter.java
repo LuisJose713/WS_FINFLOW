@@ -44,7 +44,7 @@ public class AuthIpRateLimitFilter extends OncePerRequestFilter {
         String source = sourceIp(request);
 
         if (!limiter.allow(action, source, maximum)) {
-            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+            response.setStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json;charset=UTF-8");
             response.setHeader("Retry-After", "300");
             response.setHeader("Cache-Control", "no-store");
