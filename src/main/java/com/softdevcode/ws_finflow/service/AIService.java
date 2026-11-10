@@ -7,6 +7,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +20,11 @@ public class AIService {
     public AIService(
             RestTemplateBuilder builder,
             @Value("${ai.service.url:http://localhost:8000}") String aiUrl) {
-        this.restTemplate = builder.build();
+        // Prevent an unavailable upstream AI service from occupying server threads indefinitely.
+        this.restTemplate = builder
+                .setConnectTimeout(Duration.ofSeconds(3))
+                .setReadTimeout(Duration.ofSeconds(15))
+                .build();
         this.aiUrl        = aiUrl;
     }
 
