@@ -174,4 +174,16 @@ class GoalServiceValidationTest {
         verifyNoInteractions(goals);
     }
 
+    @Test
+    void cannotContributeToAnotherUsersGoal() {
+        // Goal 4 may exist for a different user, but it must not be visible
+        // through the authenticated caller's scoped repository lookup.
+        when(goals.findByIdAndUserIdForUpdate(4L, 10L)).thenReturn(Optional.empty());
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.addContribution(10L, 4L, contribution(100d)));
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+        verifyNoInteractions(contributions);
+        verify(goals, never()).save(any());
+    }
+
 }
