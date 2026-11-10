@@ -44,6 +44,13 @@ class AdminAuthorizationTest {
     }
 
     @Test
+    void normalUserCannotReadServiceMonitor() throws Exception {
+        mvc.perform(get("/admin/monitor")
+            .header("Authorization", bearer("USER")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void normalUserCannotReadAdminBilling() throws Exception {
         mvc.perform(get("/admin/billing/plans")
             .header("Authorization", bearer("USER")))
