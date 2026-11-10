@@ -49,7 +49,7 @@ class AIControllerValidationTest {
         user.setEmail("user@example.test");
         when(authentication.getName()).thenReturn(user.getEmail());
         when(users.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
-        when(aiService.chat(22, "Hola")).thenReturn(Map.of("respuesta", "ok"));
+        doReturn(Map.of("respuesta", "ok")).when(aiService).chat(22, "Hola");
 
         assertEquals(HttpStatus.OK, controller.chat(authentication, Map.of("mensaje", " Hola ")).getStatusCode());
         verify(aiService).chat(22, "Hola");
