@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS private_vault_entries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, entry_id)
 );
-CREATE INDEX IF NOT EXISTS ix_private_vault_entries_sync
-    ON private_vault_entries (user_id, entry_id);
+-- The (user_id, entry_id) primary key already provides the pagination index.
 COMMENT ON TABLE private_vault_entries IS
     'Opaque client-encrypted AES-256-GCM records; encryption keys must never reach API or DB';
