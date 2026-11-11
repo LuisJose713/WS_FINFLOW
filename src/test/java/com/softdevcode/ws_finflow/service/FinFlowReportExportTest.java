@@ -102,15 +102,16 @@ class FinFlowReportExportTest {
     }
 
     @Test
-    void excelIsProtectedOnEverySheetAndWorkbookStructure() throws Exception {
+    void excelRemainsEditableAndHasNoSheetProtection() throws Exception {
         byte[] bytes = service.exportXlsx(42, new TransactionFilter());
         try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
-            assertTrue(wb.isStructureLocked(), "Users must not add, remove, or rename worksheets");
-            assertTrue(wb.getSheet("Resumen").getProtect(), "The financial summary must be locked");
-            assertTrue(wb.getSheet("Movimientos").getProtect(), "Transaction cells must be locked");
-            assertTrue(wb.getSheet("Movimientos").getRow(4).getCell(1).getCellStyle().getLocked());
-            // Reading data remains possible without a password.
-            assertEquals("Taxi", wb.getSheet("Movimientos").getRow(4).getCell(1).getStringCellValue());
+            assertFalse(wb.isStructureLocked());
+            assertFalse(wb.getSheet("Resumen").getProtect());
+            assertFalse(wb.getSheet("Movimientos").getProtect());
+            var sheet = wb.getSheet("Movimientos");
+            assertEquals("Taxi", sheet.getRow(4).getCell(1).getStringCellValue());
+            sheet.getRow(4).getCell(1).setCellValue("Taxi editado");
+            assertEquals("Taxi editado", sheet.getRow(4).getCell(1).getStringCellValue());
         }
     }
 
