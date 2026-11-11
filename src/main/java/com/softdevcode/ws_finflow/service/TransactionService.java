@@ -244,13 +244,13 @@ public class TransactionService {
 
         for (Transaction t : list) {
             sb.append(t.getId()).append(",")
-                    .append(escape(t.getDescription())).append(",")
-                    .append(t.getType()).append(",")
+                    .append(csvText(t.getDescription())).append(",")
+                    .append(csvText(t.getType())).append(",")
                     .append(t.getAmount()).append(",")
                     .append(t.getCategoryId()).append(",")
-                    .append(t.getDate() != null ? t.getDate().toLocalDate() : "").append(",")
-                    .append(t.getCurrency()).append(",")
-                    .append(t.getStatus()).append("\n");
+                    .append(csvText(t.getDate() != null ? t.getDate().toLocalDate().toString() : null)).append(",")
+                    .append(csvText(t.getCurrency())).append(",")
+                    .append(csvText(t.getStatus())).append("\n");
         }
         return sb.toString();
     }
@@ -368,8 +368,25 @@ public class TransactionService {
         return sb.isEmpty() ? "Todas las transacciones" : sb.toString().trim();
     }
 
-    private String escape(String value) {
-        if (value == null) return "";
-        return "\"" + value.replace("\"", "\"\"") + "\"";
+    /**
+     * CSV quoting preserves field boundaries, but does not stop spreadsheet formulas.
+     * Prefix potentially executable text with an apostrophe before RFC-style quoting.
+     * Numeric identifiers and amounts are serialized separately and stay numeric.
+     */
+    private String csvText(String value) {
+        if (value == null) return "\"\"";
+        int firstContent = 0;
+        while (firstContent < value.length()) {
+            int codePoint = value.codePointAt(firstContent);
+            if (!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)
+                    && !Character.isISOControl(codePoint)
+                    && Character.getType(codePoint) != Character.FORMAT) break;
+            firstContent += Character.charCount(codePoint);
+        }
+        boolean startsWithControl = !value.isEmpty() && Character.isISOControl(value.codePointAt(0));
+        boolean startsWithFormula = firstContent < value.length()
+                && "=+-@＝＋－＠".indexOf(value.codePointAt(firstContent)) >= 0;
+        String safe = startsWithControl || startsWithFormula ? "'" + value : value;
+        return "\"" + safe.replace("\"", "\"\"") + "\"";
     }
 }
