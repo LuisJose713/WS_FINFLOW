@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.sql.Timestamp;
+import java.nio.charset.StandardCharsets;
 
 import java.util.Map;
 import java.util.Optional;
@@ -35,9 +36,11 @@ public class AuthController {
                                    @RequestHeader(value = "X-Client-Type", defaultValue = "web") String clientType) {
         if (request == null || request.getEmail() == null || request.getEmail().isBlank()
                 || request.getEmail().length() > 254
-                || request.getPassword() == null || request.getPassword().isBlank()
-                || request.getPassword().length() > 128) {
+                || request.getPassword() == null || request.getPassword().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Solicitud inválida"));
+        }
+        if (exceedsBcryptLimit(request.getPassword())) {
+            return passwordTooLong();
         }
         String normalizedEmail=request.getEmail().trim();
         if(rateLimiter.isLocked(normalizedEmail)) {
@@ -68,9 +71,10 @@ public class AuthController {
         String name = request.getName().trim();
         String email = request.getEmail().trim();
         String password = request.getPassword();
+        if (exceedsBcryptLimit(password)) return passwordTooLong();
         if (name.length() < 2 || name.length() > 80 || email.length() > 254
                 || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
-                || password.length() < 8 || password.length() > 128) {
+                || password.length() < 8) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "Verifica nombre, correo y contraseña (mínimo 8 caracteres)"));
         }
@@ -135,8 +139,10 @@ public class AuthController {
                 org.springframework.http.HttpStatus.UNAUTHORIZED));
         if(request==null||request.currentPassword()==null||request.newPassword()==null||
                 request.confirmPassword()==null || !request.newPassword().equals(request.confirmPassword()) ||
-                request.newPassword().length()<12||request.newPassword().length()>128)
+                request.newPassword().length()<12)
             return ResponseEntity.badRequest().body(Map.of("error","La nueva contraseña debe tener al menos 12 caracteres y coincidir"));
+        if (exceedsBcryptLimit(request.currentPassword()) || exceedsBcryptLimit(request.newPassword()))
+            return passwordTooLong();
         if(!passwordEncoder.matches(request.currentPassword(),user.getPassword()))
             return ResponseEntity.status(403).body(Map.of("error","Contraseña actual incorrecta"));
         if(passwordEncoder.matches(request.newPassword(),user.getPassword()))
@@ -154,6 +160,8 @@ public class AuthController {
         User user=userRepository.findByEmail(authentication.getName())
             .orElseThrow(()->new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.UNAUTHORIZED));
+        if (request != null && request.password() != null && exceedsBcryptLimit(request.password()))
+            return passwordTooLong();
         if(request==null||request.password()==null||
             !passwordEncoder.matches(request.password(),user.getPassword()))
             return ResponseEntity.status(403).body(Map.of("error","Contraseña incorrecta"));
@@ -169,5 +177,16 @@ public class AuthController {
                         org.springframework.http.HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
         return ResponseEntity.ok(Map.of(
                 "id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole()));
+    }
+
+    // BCrypt's input limit is bytes, not Java characters. Never truncate passwords:
+    // different suffixes must not be accepted as the same credential.
+    private boolean exceedsBcryptLimit(String password) {
+        return password.length() > 72 || password.getBytes(StandardCharsets.UTF_8).length > 72;
+    }
+
+    private ResponseEntity<?> passwordTooLong() {
+        return ResponseEntity.badRequest().body(Map.of("error",
+                "La contraseña supera el máximo de 72 bytes UTF-8; algunos caracteres ocupan varios bytes."));
     }
 }
