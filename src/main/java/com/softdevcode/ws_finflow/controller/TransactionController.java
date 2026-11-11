@@ -112,6 +112,29 @@ public class TransactionController {
         return ResponseEntity.ok(service.getAvailableYears(userId));
     }
 
+    // Excel real, sin delimitadores regionales: compatible con filtros y estilos.
+    @GetMapping("/export/xlsx")
+    public ResponseEntity<byte[]> exportXlsx(
+            Authentication auth,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String search) {
+        TransactionFilter filter = new TransactionFilter();
+        filter.setType(type);
+        filter.setMonth(month);
+        filter.setYear(year);
+        filter.setCategoryId(categoryId);
+        filter.setSearch(search);
+        byte[] file = service.exportXlsx(getUserId(auth), filter);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"finflow-movimientos.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
+    }
+
     @GetMapping("/export/pdf")
     public ResponseEntity<byte[]> exportPdf(
             @RequestHeader("X-User-Id") Integer userId,
@@ -261,13 +284,15 @@ public class TransactionController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) Long categoryId) {
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String search) {
 
         TransactionFilter filter = new TransactionFilter();
         filter.setType(type);
         filter.setMonth(month);
         filter.setYear(year);
         filter.setCategoryId(categoryId);
+        filter.setSearch(search);
 
         byte[] pdf = service.exportPdf(getUserId(auth), filter);
         return ResponseEntity.ok()
