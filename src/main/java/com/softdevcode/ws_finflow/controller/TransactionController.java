@@ -278,6 +278,33 @@ public class TransactionController {
                 .body(csv.getBytes(StandardCharsets.UTF_8));
     }
 
+    // Real editable Excel workbook. JWT identity and optional search/filter
+    // are resolved exactly like the PDF endpoint; never trust X-User-Id headers.
+    @GetMapping("/export/xlsx")
+    public ResponseEntity<byte[]> exportXlsx(
+            Authentication auth,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String search) {
+
+        TransactionFilter filter = new TransactionFilter();
+        filter.setType(type);
+        filter.setMonth(month);
+        filter.setYear(year);
+        filter.setCategoryId(categoryId);
+        filter.setSearch(search);
+
+        byte[] xlsx = service.exportXlsx(getUserId(auth), filter);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"FinFlow_Movimientos.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentLength(xlsx.length)
+                .body(xlsx);
+    }
+
     @GetMapping("/export/pdf")
     public ResponseEntity<byte[]> exportPdf(
             Authentication auth,
