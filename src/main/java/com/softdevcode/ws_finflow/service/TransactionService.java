@@ -269,101 +269,126 @@ public class TransactionService {
         return result;
     }
 
-    // ── Exportar PDF ──────────────────────────────────────
+    // ── Professional branded PDF report ────────────────────────────────────
     public byte[] exportPdf(Integer userId, TransactionFilter filter) {
         List<Transaction> list = getFiltered(userId, filter);
-        Map<Long, String> categoryNames = visibleCategoryNames(userId);
+        Map<Long, String> names = visibleCategoryNames(userId);
+        double income = list.stream().filter(this::isPostedCOP)
+                .filter(t -> "income".equals(t.getType())).mapToDouble(Transaction::getAmount).sum();
+        double expenses = list.stream().filter(this::isPostedCOP)
+                .filter(t -> "expense".equals(t.getType())).mapToDouble(Transaction::getAmount).sum();
+        DeviceRgb navy = new DeviceRgb(15, 23, 42);
+        DeviceRgb ink = new DeviceRgb(32, 43, 63);
+        DeviceRgb blue = new DeviceRgb(91, 110, 245);
+        DeviceRgb muted = new DeviceRgb(100, 116, 139);
+        DeviceRgb green = new DeviceRgb(22, 163, 74);
+        DeviceRgb red = new DeviceRgb(220, 38, 38);
+        DeviceRgb pale = new DeviceRgb(242, 246, 253);
+        DeviceRgb white = new DeviceRgb(255, 255, 255);
+        java.text.NumberFormat money = java.text.NumberFormat.getNumberInstance(
+                java.util.Locale.forLanguageTag("es-CO"));
+        money.setMaximumFractionDigits(2);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            PdfWriter   writer   = new PdfWriter(baos);
-            PdfDocument pdfDoc   = new PdfDocument(writer);
-            Document    document = new Document(pdfDoc);
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            PdfDocument pdf = new PdfDocument(new PdfWriter(out));
+            pdf.setDefaultPageSize(com.itextpdf.kernel.geom.PageSize.A4.rotate());
+            Document doc = new Document(pdf);
+            doc.setMargins(32, 38, 34, 38);
 
-            // Identidad FinFlow: encabezado de marca y subtítulo del reporte.
-            document.add(new Paragraph("FinFlow")
-                    .setFontSize(23)
-                    .setBold()
-                    .setFontColor(new DeviceRgb(91, 110, 245))
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginBottom(4));
+            Table masthead = new Table(UnitValue.createPercentArray(new float[]{4, 2}))
+                    .useAllAvailableWidth();
+            masthead.addCell(new Cell()
+                    .add(new Paragraph("FinFlow").setBold().setFontSize(25)
+                            .setFontColor(white).setMarginBottom(1))
+                    .add(new Paragraph("FINANCIAL INTELLIGENCE  /  INFORME PERSONAL")
+                            .setFontSize(8).setFontColor(new DeviceRgb(195, 208, 255)))
+                    .setBackgroundColor(navy).setPadding(16)
+                    .setBorder(com.itextpdf.layout.borders.Border.NO_BORDER));
+            masthead.addCell(new Cell()
+                    .add(new Paragraph("REPORTE DE MOVIMIENTOS").setFontSize(11).setBold()
+                            .setFontColor(white).setTextAlignment(TextAlignment.RIGHT))
+                    .add(new Paragraph("Emitido  " +
+                            java.time.LocalDate.now(java.time.ZoneId.of("America/Bogota")).format(fmt))
+                            .setFontSize(9).setFontColor(new DeviceRgb(195, 208, 255))
+                            .setTextAlignment(TextAlignment.RIGHT))
+                    .setBackgroundColor(navy).setPadding(16)
+                    .setBorder(com.itextpdf.layout.borders.Border.NO_BORDER));
+            doc.add(masthead);
+            doc.add(new Paragraph("VISIÓN FINANCIERA")
+                    .setFontSize(9).setBold().setFontColor(blue)
+                    .setMarginTop(18).setMarginBottom(1));
+            doc.add(new Paragraph("Tus movimientos, con claridad.")
+                    .setFontSize(17).setBold().setFontColor(ink)
+                    .setMarginBottom(2));
+            doc.add(new Paragraph(buildSubtitle(filter) + "  /  " + list.size() + " registros")
+                    .setFontSize(9).setFontColor(muted).setMarginBottom(12));
 
-            document.add(new Paragraph("REPORTE DE MOVIMIENTOS")
-                    .setFontSize(12).setBold()
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginBottom(4));
+            Table kpis = new Table(UnitValue.createPercentArray(new float[]{1, 1, 1, 1}))
+                    .useAllAvailableWidth();
+            kpis.addCell(reportKpi("INGRESOS", "$ " + money.format(income), green, pale));
+            kpis.addCell(reportKpi("GASTOS", "$ " + money.format(expenses), red, pale));
+            kpis.addCell(reportKpi("BALANCE", "$ " + money.format(income - expenses), blue, pale));
+            kpis.addCell(reportKpi("MOVIMIENTOS", Integer.toString(list.size()), ink, pale));
+            doc.add(kpis);
+            doc.add(new Paragraph("Resumen: movimientos completados en COP. No representa saldo bancario.")
+                    .setFontSize(8).setFontColor(muted).setMarginTop(5).setMarginBottom(14));
+            doc.add(new Paragraph("DETALLE DE TRANSACCIONES")
+                    .setFontSize(10).setBold().setFontColor(navy).setMarginBottom(7));
 
-            // Subtítulo
-            document.add(new Paragraph(buildSubtitle(filter))
-                    .setFontSize(10)
-                    .setFontColor(ColorConstants.GRAY)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginBottom(16));
-
-            // Resumen
-            double totalIncome  = list.stream().filter(t -> "income".equals(t.getType())).mapToDouble(Transaction::getAmount).sum();
-            double totalExpense = list.stream().filter(t -> "expense".equals(t.getType())).mapToDouble(Transaction::getAmount).sum();
-            double balance      = totalIncome - totalExpense;
-
-            Table summary = new Table(UnitValue.createPercentArray(new float[]{1, 1, 1})).useAllAvailableWidth();
-            summary.addCell(summaryCell("Total ingresos", String.format("$%,.0f", totalIncome),  new DeviceRgb(34, 197, 94)));
-            summary.addCell(summaryCell("Total egresos",  String.format("$%,.0f", totalExpense), new DeviceRgb(239, 68, 68)));
-            summary.addCell(summaryCell("Balance",        String.format("$%,.0f", balance),      new DeviceRgb(108, 138, 255)));
-            document.add(summary);
-            document.add(new Paragraph(" ").setMarginBottom(12));
-
-            // Tabla
-            Table table = new Table(UnitValue.createPercentArray(new float[]{3, 2, 2, 2, 2})).useAllAvailableWidth();
-
-            DeviceRgb headerBg = new DeviceRgb(30, 34, 48);
-            for (String h : new String[]{"Descripción", "Tipo", "Monto", "Categoría", "Fecha"}) {
-                table.addHeaderCell(new Cell()
-                        .add(new Paragraph(h).setBold().setFontSize(9).setFontColor(ColorConstants.WHITE))
-                        .setBackgroundColor(headerBg)
-                        .setPadding(6));
+            Table detail = new Table(UnitValue.createPercentArray(
+                    new float[]{1.25f, 3.3f, 2.2f, 1.15f, 1f, 1.6f, 1.6f})).useAllAvailableWidth();
+            for (String title : new String[]{"Fecha", "Concepto", "Categoría", "Tipo",
+                    "Moneda", "Ingreso", "Gasto"}) {
+                detail.addHeaderCell(new Cell()
+                        .add(new Paragraph(title).setFontSize(8).setBold().setFontColor(white))
+                        .setBackgroundColor(navy).setPadding(8)
+                        .setBorder(com.itextpdf.layout.borders.Border.NO_BORDER));
             }
-
-            DateTimeFormatter fmt    = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-            DeviceRgb incomeColor   = new DeviceRgb(34, 197, 94);
-            DeviceRgb expenseColor  = new DeviceRgb(239, 68, 68);
-            DeviceRgb rowAlt        = new DeviceRgb(245, 246, 250);
-
             for (int i = 0; i < list.size(); i++) {
-                Transaction t    = list.get(i);
-                boolean isIncome = "income".equals(t.getType());
-                DeviceRgb amtColor = isIncome ? incomeColor : expenseColor;
-                DeviceRgb rowBg    = i % 2 == 0 ? new DeviceRgb(255, 255, 255) : rowAlt;
-
-                table.addCell(rowCell(t.getDescription(), rowBg, ColorConstants.BLACK, TextAlignment.LEFT));
-                table.addCell(rowCell(isIncome ? "Ingreso" : "Gasto", rowBg, amtColor, TextAlignment.CENTER));
-                table.addCell(rowCell(
-                        (isIncome ? "+" : "-") + String.format("$%,.0f", t.getAmount()),
-                        rowBg, amtColor, TextAlignment.RIGHT));
-                table.addCell(rowCell(FinFlowExcelReport.categoryName(t, categoryNames), rowBg, ColorConstants.GRAY, TextAlignment.LEFT));
-                table.addCell(rowCell(t.getDate() != null ? t.getDate().format(fmt) : "-", rowBg, ColorConstants.GRAY, TextAlignment.CENTER));
+                Transaction tx = list.get(i);
+                boolean isIncome = "income".equals(tx.getType());
+                boolean isExpense = "expense".equals(tx.getType());
+                DeviceRgb bg = i % 2 == 0 ? white : pale;
+                String amount = tx.getAmount() != null && Double.isFinite(tx.getAmount())
+                        ? money.format(Math.abs(tx.getAmount())) : "—";
+                detail.addCell(rowCell(tx.getDate() == null ? "—" : tx.getDate().format(fmt),
+                        bg, muted, TextAlignment.LEFT));
+                detail.addCell(rowCell(tx.getDescription(), bg, ink, TextAlignment.LEFT));
+                detail.addCell(rowCell(FinFlowExcelReport.categoryName(tx, names),
+                        bg, ink, TextAlignment.LEFT));
+                detail.addCell(rowCell(isIncome ? "Ingreso" : isExpense ? "Gasto" : "—",
+                        bg, ink, TextAlignment.LEFT));
+                detail.addCell(rowCell(tx.getCurrency() == null ? "COP" : tx.getCurrency(),
+                        bg, muted, TextAlignment.LEFT));
+                detail.addCell(rowCell(isIncome ? amount : "—", bg, green, TextAlignment.RIGHT));
+                detail.addCell(rowCell(isExpense ? amount : "—", bg, red, TextAlignment.RIGHT));
             }
-
             if (list.isEmpty()) {
-                document.add(new Paragraph("No hay movimientos para los filtros seleccionados.")
-                        .setFontSize(10).setTextAlignment(TextAlignment.CENTER)
-                        .setMarginTop(14));
+                doc.add(new Paragraph("No hay movimientos para los filtros seleccionados.")
+                        .setTextAlignment(TextAlignment.CENTER).setFontSize(10)
+                        .setFontColor(muted).setMarginTop(16));
             } else {
-                document.add(table);
+                doc.add(detail);
             }
-
-            // Pie
-            document.add(new Paragraph("FinFlow · Reporte personal y confidencial · Generado el " +
-                    java.time.LocalDate.now(java.time.ZoneId.of("America/Bogota")).format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                    .setFontSize(8)
-                    .setFontColor(ColorConstants.GRAY)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginTop(16));
-
-            document.close();
-            return baos.toByteArray();
-
+            doc.add(new Paragraph("FINFLOW  /  DOCUMENTO PERSONAL Y CONFIDENCIAL")
+                    .setFontSize(8).setBold().setFontColor(blue).setMarginTop(18));
+            doc.add(new Paragraph("Este informe contiene movimientos registrados por el usuario. " +
+                    "Comprueba los importes con tu entidad financiera antes de tomar decisiones.")
+                    .setFontSize(8).setFontColor(muted));
+            doc.close();
+            return out.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Error al generar PDF", e);
+            throw new RuntimeException("Error al generar PDF FinFlow", e);
         }
+    }
+
+    private Cell reportKpi(String label, String value, DeviceRgb accent, DeviceRgb background) {
+        return new Cell().add(new Paragraph(label).setFontSize(8).setBold()
+                        .setFontColor(new DeviceRgb(100, 116, 139)).setMarginBottom(5))
+                .add(new Paragraph(value).setFontSize(15).setBold().setFontColor(accent))
+                .setPadding(11).setBackgroundColor(background)
+                .setBorder(new SolidBorder(new DeviceRgb(226, 232, 240), 1));
     }
 
     // ── Helpers ───────────────────────────────────────────
