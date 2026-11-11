@@ -255,20 +255,40 @@ public class TransactionService {
         return sb.toString();
     }
 
+    // ── Native Excel report: real cells, formatting and category names ────────
+    public byte[] exportXlsx(Integer userId, TransactionFilter filter) {
+        return FinFlowExcelReport.build(getFiltered(userId, filter),
+                visibleCategoryNames(userId), buildSubtitle(filter));
+    }
+
+    private Map<Long, String> visibleCategoryNames(Integer userId) {
+        Map<Long, String> result = new HashMap<>();
+        for (Category c : categoryRepository.findVisibleTo(userId)) {
+            if (c.getId() != null && c.getName() != null) result.put(c.getId(), c.getName());
+        }
+        return result;
+    }
+
     // ── Exportar PDF ──────────────────────────────────────
     public byte[] exportPdf(Integer userId, TransactionFilter filter) {
         List<Transaction> list = getFiltered(userId, filter);
+        Map<Long, String> categoryNames = visibleCategoryNames(userId);
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             PdfWriter   writer   = new PdfWriter(baos);
             PdfDocument pdfDoc   = new PdfDocument(writer);
             Document    document = new Document(pdfDoc);
 
-            // Título
-            document.add(new Paragraph("Reporte de Transacciones")
-                    .setFontSize(18)
+            // Identidad FinFlow: encabezado de marca y subtítulo del reporte.
+            document.add(new Paragraph("FinFlow")
+                    .setFontSize(23)
                     .setBold()
-                    .setFontColor(new DeviceRgb(108, 138, 255))
+                    .setFontColor(new DeviceRgb(91, 110, 245))
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginBottom(4));
+
+            document.add(new Paragraph("REPORTE DE MOVIMIENTOS")
+                    .setFontSize(12).setBold()
                     .setTextAlignment(TextAlignment.CENTER)
                     .setMarginBottom(4));
 
@@ -318,15 +338,21 @@ public class TransactionService {
                 table.addCell(rowCell(
                         (isIncome ? "+" : "-") + String.format("$%,.0f", t.getAmount()),
                         rowBg, amtColor, TextAlignment.RIGHT));
-                table.addCell(rowCell(t.getCategoryId() != null ? "#" + t.getCategoryId() : "-", rowBg, ColorConstants.GRAY, TextAlignment.CENTER));
+                table.addCell(rowCell(FinFlowExcelReport.categoryName(t, categoryNames), rowBg, ColorConstants.GRAY, TextAlignment.LEFT));
                 table.addCell(rowCell(t.getDate() != null ? t.getDate().format(fmt) : "-", rowBg, ColorConstants.GRAY, TextAlignment.CENTER));
             }
 
-            document.add(table);
+            if (list.isEmpty()) {
+                document.add(new Paragraph("No hay movimientos para los filtros seleccionados.")
+                        .setFontSize(10).setTextAlignment(TextAlignment.CENTER)
+                        .setMarginTop(14));
+            } else {
+                document.add(table);
+            }
 
             // Pie
-            document.add(new Paragraph("FinFlow · Generado el " +
-                    java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+            document.add(new Paragraph("FinFlow · Reporte personal y confidencial · Generado el " +
+                    java.time.LocalDate.now(java.time.ZoneId.of("America/Bogota")).format(DateTimeFormatter.ofPattern("dd/MM/yyyy")))
                     .setFontSize(8)
                     .setFontColor(ColorConstants.GRAY)
                     .setTextAlignment(TextAlignment.CENTER)
