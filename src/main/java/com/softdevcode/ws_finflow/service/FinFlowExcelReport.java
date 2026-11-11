@@ -87,14 +87,14 @@ public final class FinFlowExcelReport {
             int firstExcelRow = 5;
             int lastExcelRow = Math.max(firstExcelRow, transactions.size() + 4);
             Cell inc = merged(cover, 5, 0, 1, "", kpiNumber);
-            inc.setCellFormula("SUM(Movimientos!E" + firstExcelRow + ":E" + lastExcelRow + ")");
+            inc.setCellFormula("SUMIFS(Movimientos!E" + firstExcelRow + ":E" + lastExcelRow + ",Movimientos!G" + firstExcelRow + ":G" + lastExcelRow + ",\"COP\",Movimientos!H" + firstExcelRow + ":H" + lastExcelRow + ",\"Completado\")");
             Cell exp = merged(cover, 5, 2, 3, "", kpiNumber);
-            exp.setCellFormula("SUM(Movimientos!F" + firstExcelRow + ":F" + lastExcelRow + ")");
+            exp.setCellFormula("SUMIFS(Movimientos!F" + firstExcelRow + ":F" + lastExcelRow + ",Movimientos!G" + firstExcelRow + ":G" + lastExcelRow + ",\"COP\",Movimientos!H" + firstExcelRow + ":H" + lastExcelRow + ",\"Completado\")");
             Cell balance = merged(cover, 5, 4, 5, "", kpiNumber);
             balance.setCellFormula("A6-C6");
             merged(cover, 5, 6, 7, Integer.toString(transactions.size()), kpi);
             cover.getRow(5).setHeightInPoints(42);
-            merged(cover, 8, 0, 7, "Los valores son movimientos registrados, no saldos bancarios verificados.", note);
+            merged(cover, 8, 0, 7, "Indicadores sobre operaciones completadas en COP, no sobre saldos bancarios.", note);
             merged(cover, 10, 0, 7, "Abre la pestaña Movimientos para filtrar, ordenar o analizar cada transacción.", note);
             merged(cover, 12, 0, 7, "FinFlow  •  Toma el control de tu dinero y construye tu futuro.", note);
 
