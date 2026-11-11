@@ -1,5 +1,6 @@
 package com.softdevcode.ws_finflow.service;
 
+import com.itextpdf.kernel.pdf.EncryptionConstants;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
@@ -65,6 +66,14 @@ class FinFlowReportExportTest {
             assertTrue(text.contains("FinFlow"));
             assertTrue(text.contains("Transporte"));
             assertFalse(text.contains("#3"));
+            // User can open and read, but receives no owner/edit privileges.
+            assertTrue(pdf.getReader().isEncrypted());
+            assertFalse(pdf.getReader().isOpenedWithFullPermission());
+            long permissions = pdf.getReader().getPermissions();
+            assertEquals(0L, permissions & EncryptionConstants.ALLOW_MODIFY_CONTENTS);
+            assertEquals(0L, permissions & EncryptionConstants.ALLOW_MODIFY_ANNOTATIONS);
+            assertEquals(0L, permissions & EncryptionConstants.ALLOW_FILL_IN);
+            assertEquals(0L, permissions & EncryptionConstants.ALLOW_ASSEMBLY);
         }
         verify(categories).findVisibleTo(42);
     }
@@ -89,6 +98,20 @@ class FinFlowReportExportTest {
             assertNotNull(sheet.getPaneInformation());
             assertTrue(sheet.getPaneInformation().isFreezePane());
             assertEquals(CellType.FORMULA, wb.getSheet("Resumen").getRow(5).getCell(0).getCellType());
+        }
+    }
+
+    @Test
+    void excelRemainsEditableAndHasNoSheetProtection() throws Exception {
+        byte[] bytes = service.exportXlsx(42, new TransactionFilter());
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            assertFalse(wb.isStructureLocked());
+            assertFalse(wb.getSheet("Resumen").getProtect());
+            assertFalse(wb.getSheet("Movimientos").getProtect());
+            var sheet = wb.getSheet("Movimientos");
+            assertEquals("Taxi", sheet.getRow(4).getCell(1).getStringCellValue());
+            sheet.getRow(4).getCell(1).setCellValue("Taxi editado");
+            assertEquals("Taxi editado", sheet.getRow(4).getCell(1).getStringCellValue());
         }
     }
 
