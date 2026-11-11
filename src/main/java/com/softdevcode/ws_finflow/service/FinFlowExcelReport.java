@@ -4,12 +4,9 @@ import com.softdevcode.ws_finflow.entity.Transaction;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.*;
-import org.apache.poi.poifs.crypt.HashAlgorithm;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.security.SecureRandom;
-import java.util.HexFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -31,8 +28,6 @@ public final class FinFlowExcelReport {
     private static final XSSFColor PALE = rgb(242, 246, 253);
     private static final XSSFColor GREEN = rgb(22, 163, 74);
     private static final XSSFColor RED = rgb(220, 38, 38);
-
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private FinFlowExcelReport() {}
 
@@ -82,7 +77,7 @@ public final class FinFlowExcelReport {
             cover.getRow(0).setHeightInPoints(47);
             merged(cover, 1, 0, 7, safe(subtitle), sub);
             merged(cover, 2, 0, 7, "Generado el " +
-                    LocalDate.now(ZoneId.of("America/Bogota")).format(DISPLAY_DATE) + "  •  COP  •  SOLO LECTURA", note);
+                    LocalDate.now(ZoneId.of("America/Bogota")).format(DISPLAY_DATE) + "  •  COP", note);
             cover.getRow(2).setHeightInPoints(26);
             merged(cover, 4, 0, 1, "INGRESOS", heading);
             merged(cover, 4, 2, 3, "GASTOS", heading);
@@ -149,20 +144,6 @@ public final class FinFlowExcelReport {
             detail.setRepeatingRows(new CellRangeAddress(3, 3, 0, 7));
             book.getCreationHelper().createFormulaEvaluator().evaluateAll();
             book.setForceFormulaRecalculation(true);
-            // Excel's native protection prevents accidental edits in compliant apps.
-            // A new, undisclosed password per export avoids a shared hardcoded key.
-            // Worksheet protection is NOT cryptographic immutability: a copy can still be modified.
-            byte[] secretBytes = new byte[24];
-            SECURE_RANDOM.nextBytes(secretBytes);
-            String password = HexFormat.of().formatHex(secretBytes);
-            cover.protectSheet(password);
-            cover.setSheetPassword(password, HashAlgorithm.sha512);
-            detail.protectSheet(password);
-            detail.setSheetPassword(password, HashAlgorithm.sha512);
-            // Reading and filter navigation remain possible; cell edits are blocked in Excel.
-            detail.lockAutoFilter(false);
-            book.lockStructure();
-            book.setWorkbookPassword(password, HashAlgorithm.sha512);
             book.write(out);
             return out.toByteArray();
         } catch (IOException e) {
