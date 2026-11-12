@@ -10,3 +10,10 @@ CREATE TABLE IF NOT EXISTS auth_refresh_sessions (
 );
 CREATE INDEX IF NOT EXISTS auth_refresh_sessions_family_idx ON auth_refresh_sessions(family_id);
 CREATE INDEX IF NOT EXISTS auth_refresh_sessions_expiry_idx ON auth_refresh_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS user_ui_preferences (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    card_id VARCHAR(80) NOT NULL,
+    hidden BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (user_id, card_id)
+);
