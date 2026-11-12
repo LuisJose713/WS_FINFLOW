@@ -26,9 +26,15 @@ class AuthControllerValidationTest {
     @Mock UserRepository users;
     @Mock JwtUtil jwt;
     @Mock org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Mock com.softdevcode.ws_finflow.security.RefreshTokenService refreshTokens;
     @Mock com.softdevcode.ws_finflow.config.PrivacyPolicySettings privacySettings;
     @Mock com.softdevcode.ws_finflow.security.AuthRateLimiter limiter;
     @InjectMocks AuthController controller;
+
+    @org.junit.jupiter.api.BeforeEach
+    void refreshCredential() {
+        lenient().when(refreshTokens.issue(any(User.class))).thenReturn("test-refresh-credential");
+    }
 
     @Test
     void rejectsInvalidLoginBeforeDatabaseLookup() {

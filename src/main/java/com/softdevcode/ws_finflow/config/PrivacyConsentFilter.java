@@ -34,6 +34,8 @@ public class PrivacyConsentFilter extends OncePerRequestFilter {
             || path.startsWith("/actuator/")
             || path.equals("/auth/login")
             || path.equals("/auth/register")
+            || path.equals("/auth/refresh")
+            || path.equals("/auth/logout")
             || path.equals("/auth/me")
             || path.equals("/auth/change-password")
             || path.equals("/auth/revoke-sessions")

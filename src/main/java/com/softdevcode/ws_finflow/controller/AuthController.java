@@ -29,6 +29,7 @@ public class AuthController {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PrivacyPolicySettings privacySettings;
     @Autowired private com.softdevcode.ws_finflow.security.AuthRateLimiter rateLimiter;
+    @Autowired private com.softdevcode.ws_finflow.security.RefreshTokenService refreshTokens;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @PostMapping("/login")
@@ -57,7 +58,7 @@ public class AuthController {
         // Mobile TTL must not be granted based on an untrusted client-supplied header.
         String token = jwtUtil.generateToken(user.getEmail(), false, user.getTokenVersion());
         return ResponseEntity.ok(Map.of(
-                "token", token,
+                "token", token, "refreshToken", refreshTokens.issue(user),
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
     }
 
@@ -123,12 +124,24 @@ public class AuthController {
                 Timestamp.from(trialStart.atZone(ZoneOffset.UTC).plusMonths(1).toInstant()));
         String token = jwtUtil.generateToken(user.getEmail(), false, user.getTokenVersion());
         return ResponseEntity.ok(Map.of(
-                "token", token,
+                "token", token, "refreshToken", refreshTokens.issue(user),
                 "user", Map.of("id", user.getId(), "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
     }
 
     public record ChangePasswordRequest(String currentPassword,String newPassword,String confirmPassword){}
     public record ConfirmPasswordRequest(String password){}
+    public record RefreshRequest(String refreshToken){}
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@RequestBody RefreshRequest request) {
+        return ResponseEntity.ok(refreshTokens.refresh(request == null ? null : request.refreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody(required = false) RefreshRequest request) {
+        refreshTokens.logout(request == null ? null : request.refreshToken());
+        return ResponseEntity.noContent().build();
+    }
 
     @PostMapping("/change-password")
     public ResponseEntity<?> changePassword(Authentication authentication,@RequestBody ChangePasswordRequest request){
