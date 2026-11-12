@@ -5,6 +5,8 @@ import com.softdevcode.ws_finflow.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -13,10 +15,20 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @Transactional
 class UiPreferencesControllerTest {
     @Autowired UserRepository users;
     @Autowired UiPreferencesController preferences;
+    @Autowired MockMvc mvc;
+
+    @Test void missingOrInvalidCredentialsReturn401ForNativeSessionRenewal() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/preferences/ui"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/preferences/ui")
+                        .header("Authorization", "Bearer invalid-test-token"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+    }
 
     private UsernamePasswordAuthenticationToken account() {
         User user = new User();
