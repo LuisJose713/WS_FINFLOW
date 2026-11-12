@@ -6,7 +6,7 @@ RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = public, pg_temp
-AS $finflow$
+AS '
 BEGIN
     IF p_user_id IS NULL THEN
         RETURN FALSE;
@@ -36,6 +36,6 @@ BEGIN
     DELETE FROM public.users WHERE id = p_user_id;
     RETURN FOUND;
 END
-$finflow$;
+';
 
 REVOKE ALL ON FUNCTION public.finflow_delete_account(BIGINT) FROM PUBLIC;
