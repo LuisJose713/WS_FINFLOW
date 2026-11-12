@@ -132,6 +132,17 @@ public class AuthController {
     public record ConfirmPasswordRequest(String password){}
     public record RefreshRequest(String refreshToken){}
 
+    @PostMapping("/session")
+    public ResponseEntity<?> adoptSession(Authentication authentication) {
+        if (authentication == null) return ResponseEntity.status(401).build();
+        User user = userRepository.findByEmail(authentication.getName()).orElseThrow(() ->
+            new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED));
+        int version = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+        return ResponseEntity.ok(Map.of("token", jwtUtil.generateToken(user.getEmail(), false, version),
+            "refreshToken", refreshTokens.issue(user), "user", Map.of("id", user.getId(),
+                "name", user.getUsername(), "email", user.getEmail(), "role", user.getRole())));
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(@RequestBody RefreshRequest request) {
         return ResponseEntity.ok(refreshTokens.refresh(request == null ? null : request.refreshToken()));
