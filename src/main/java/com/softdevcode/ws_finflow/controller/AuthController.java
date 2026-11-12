@@ -194,6 +194,33 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("status","sessions_revoked","logoutRequired",true));
     }
 
+    /**
+     * Permanent self-service deletion: password is verified in the API.
+     * The database function owns the dependent-row ordering atomically.
+     * Only the authenticated principal's ID is ever passed to PostgreSQL.
+     */
+    @DeleteMapping("/account")
+    @Transactional
+    public ResponseEntity<?> deleteAccount(Authentication authentication,
+                                            @RequestBody(required = false) ConfirmPasswordRequest request) {
+        if (authentication == null) return ResponseEntity.status(401).body(Map.of("error", "Sesión requerida"));
+        User user = userRepository.findByEmail(authentication.getName()).orElse(null);
+        if (user == null) return ResponseEntity.status(401).body(Map.of("error", "Sesión requerida"));
+        if (request == null || request.password() == null || request.password().isBlank()
+                || exceedsBcryptLimit(request.password()))
+            return ResponseEntity.badRequest().body(Map.of("error", "Contraseña requerida (máximo 72 bytes)"));
+        if (rateLimiter.isLocked(user.getEmail()))
+            return ResponseEntity.status(429).body(Map.of("error", "Demasiados intentos. Prueba más tarde."));
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            rateLimiter.recordFailure(user.getEmail());
+            return ResponseEntity.status(403).body(Map.of("error", "Contraseña incorrecta"));
+        }
+        rateLimiter.clear(user.getEmail());
+        Boolean deleted = jdbc.queryForObject("SELECT public.finflow_delete_account(?)", Boolean.class, user.getId());
+        return Boolean.TRUE.equals(deleted) ? ResponseEntity.noContent().build()
+                : ResponseEntity.status(409).body(Map.of("error", "No fue posible eliminar la cuenta"));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<?> me(Authentication authentication) {
         User user = userRepository.findByEmail(authentication.getName())
