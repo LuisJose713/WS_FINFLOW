@@ -54,37 +54,58 @@ public class TransactionService {
 
     // ── Con filtros dinámicos ─────────────────────────────
     public List<Transaction> getFiltered(Integer userId, TransactionFilter filter) {
+        // A bounded date range lets PostgreSQL use (user_id, date) indexes when
+        // the year is supplied. Applying YEAR()/MONTH() to the column cannot.
+        Integer month = filter.getMonth();
+        Integer year = filter.getYear();
+        if (month != null && (month < 1 || month > 12)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Mes inválido");
+        }
+        if (year != null && (year < 1 || year >= 9999)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Año inválido");
+        }
+
         StringBuilder jpql = new StringBuilder(
                 "SELECT t FROM Transaction t WHERE t.userId = :userId");
 
         if (filter.getType()       != null) jpql.append(" AND t.type = :type");
-        if (filter.getMonth()      != null) jpql.append(" AND MONTH(t.date) = :month");
-        if (filter.getYear()       != null) jpql.append(" AND YEAR(t.date) = :year");
+        if (year != null) jpql.append(" AND t.date >= :dateFrom AND t.date < :dateTo");
+        else if (month != null) jpql.append(" AND MONTH(t.date) = :month");
         if (filter.getCategoryId() != null) jpql.append(" AND t.categoryId = :categoryId");
         if (filter.getSearch()     != null) jpql.append(" AND LOWER(t.description) LIKE :search");
 
-        jpql.append(" ORDER BY t.date DESC");
+        jpql.append(" ORDER BY t.date DESC, t.id DESC");
 
         TypedQuery<Transaction> query = em.createQuery(jpql.toString(), Transaction.class);
         query.setParameter("userId", userId);
 
-        if (filter.getType()       != null) query.setParameter("type",       filter.getType());
-        if (filter.getMonth()      != null) query.setParameter("month",      filter.getMonth());
-        if (filter.getYear()       != null) query.setParameter("year",       filter.getYear());
+        if (filter.getType()       != null) query.setParameter("type", filter.getType());
+        if (year != null) {
+            LocalDateTime from = LocalDateTime.of(year, month == null ? 1 : month, 1, 0, 0);
+            query.setParameter("dateFrom", from);
+            query.setParameter("dateTo", month == null ? from.plusYears(1) : from.plusMonths(1));
+        } else if (month != null) {
+            query.setParameter("month", month);
+        }
         if (filter.getCategoryId() != null) query.setParameter("categoryId", filter.getCategoryId());
-        if (filter.getSearch()     != null) query.setParameter("search",     "%" + filter.getSearch().toLowerCase() + "%");
+        if (filter.getSearch()     != null) query.setParameter("search", "%" + filter.getSearch().toLowerCase() + "%");
 
         return query.getResultList();
     }
 
     // ── Años disponibles ──────────────────────────────────
     public List<Integer> getAvailableYears(Integer userId) {
-        return repository.findByUserIdOrderByDateDesc(userId).stream()
-                .filter(t -> t.getDate() != null)
-                .map(t -> t.getDate().getYear())
-                .distinct()
-                .sorted(Comparator.reverseOrder())
-                .collect(Collectors.toList());
+        // Only return distinct years from the database; avoid materializing
+        // every transaction merely to populate a small year selector.
+        return em.createQuery("""
+                SELECT DISTINCT YEAR(t.date) FROM Transaction t
+                WHERE t.userId = :userId AND t.date IS NOT NULL
+                ORDER BY YEAR(t.date) DESC
+                """, Integer.class)
+                .setParameter("userId", userId)
+                .getResultList();
     }
 
     // ── Crear ─────────────────────────────────────────────
