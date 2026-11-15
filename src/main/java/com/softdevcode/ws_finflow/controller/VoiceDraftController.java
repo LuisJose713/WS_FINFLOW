@@ -47,7 +47,7 @@ public class VoiceDraftController {
             ? defaultCurrency : "COP";
         if (normal.matches("(?s).*\\b(dolares?|usd|dollars?)\\b.*")) currency = "USD";
         else if (normal.matches("(?s).*\\b(euros?|eur)\\b.*")) currency = "EUR";
-        else if (normal.matches("(?s).*\\b(pesos? colombianos?|cop)\\b.*")) currency = "COP";
+        else if (normal.matches("(?s).*\\b(pesos?(?: colombianos?)?|cop)\\b.*")) currency = "COP";
 
         boolean income = INCOME.matcher(normal).find(), expense = EXPENSE.matcher(normal).find();
         String type = income == expense ? null : (income ? "income" : "expense");
