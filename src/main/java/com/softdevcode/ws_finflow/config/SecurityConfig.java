@@ -44,7 +44,8 @@ public class SecurityConfig {
                 }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register", "/auth/refresh", "/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register", "/auth/refresh", "/auth/logout", "/auth/google/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/google/config").permitAll()
                         .requestMatchers(HttpMethod.GET, "/billing/catalog", "/billing/quote", "/privacy/policy", "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()

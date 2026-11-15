@@ -32,6 +32,7 @@ public class PrivacyConsentFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.startsWith("/privacy/")
             || path.startsWith("/actuator/")
+            || path.startsWith("/auth/google/")
             || path.equals("/auth/login")
             || path.equals("/auth/register")
             || path.equals("/auth/refresh")

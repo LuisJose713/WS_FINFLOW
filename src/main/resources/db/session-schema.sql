@@ -31,3 +31,13 @@ CREATE TABLE IF NOT EXISTS finflow_push_delivery_days (
  delivery_day DATE NOT NULL,
  PRIMARY KEY(user_id, delivery_day)
 );
+
+-- Verified Google account-to-user linking. No automatic merging by email.
+-- Subject is Google's immutable "sub"; user is the existing FinFlow account.
+CREATE TABLE IF NOT EXISTS public.google_account_links (
+    google_sub VARCHAR(255) PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
+    google_email VARCHAR(254) NOT NULL,
+    linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_google_account_links_user_id ON public.google_account_links(user_id);
