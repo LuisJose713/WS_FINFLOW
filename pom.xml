@@ -32,6 +32,8 @@
 
 		<!-- RFC 8292 VAPID and encrypted Web Push payloads -->
         <dependency><groupId>nl.martijndwars</groupId><artifactId>web-push</artifactId><version>5.1.2</version></dependency>
+        <!-- WebPush 5.x send() exposes Apache HttpClient 4 response types at compile time. -->
+        <dependency><groupId>org.apache.httpcomponents</groupId><artifactId>httpclient</artifactId><version>4.5.14</version></dependency>
         <!-- REST API -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
