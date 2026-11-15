@@ -129,6 +129,7 @@ public class AuthController {
     }
 
     public record ChangePasswordRequest(String currentPassword,String newPassword,String confirmPassword){}
+    public record ChangeEmailRequest(String currentPassword,String newEmail,String confirmEmail){}
     public record ConfirmPasswordRequest(String password){}
     public record RefreshRequest(String refreshToken){}
 
@@ -176,6 +177,44 @@ public class AuthController {
         user.setPasswordChangedAt(java.time.LocalDateTime.now());
         userRepository.save(user);
         return ResponseEntity.ok(Map.of("status","password_changed","logoutRequired",true));
+    }
+
+    /** Verified by current password, followed by revocation of all existing sessions. */
+    @PostMapping("/change-email")
+    @Transactional
+    public ResponseEntity<?> changeEmail(Authentication authentication,
+                                         @RequestBody(required = false) ChangeEmailRequest request) {
+        if (authentication == null)
+            return ResponseEntity.status(401).body(Map.of("error", "Sesión requerida"));
+        if (request == null || request.currentPassword() == null ||
+                request.newEmail() == null || request.confirmEmail() == null)
+            return ResponseEntity.badRequest().body(Map.of("error", "Datos incompletos"));
+        String desired = request.newEmail().trim().toLowerCase(java.util.Locale.ROOT);
+        String confirmation = request.confirmEmail().trim().toLowerCase(java.util.Locale.ROOT);
+        if (desired.length() > 254 || !desired.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$") ||
+                !desired.equals(confirmation))
+            return ResponseEntity.badRequest().body(Map.of("error", "Confirma un correo electrónico válido"));
+        if (request.currentPassword().isBlank() || exceedsBcryptLimit(request.currentPassword()))
+            return ResponseEntity.badRequest().body(Map.of("error", "Contraseña requerida (máximo 72 bytes)"));
+        User user = userRepository.findByEmail(authentication.getName()).orElse(null);
+        if (user == null)
+            return ResponseEntity.status(401).body(Map.of("error", "Sesión requerida"));
+        if (desired.equalsIgnoreCase(user.getEmail()))
+            return ResponseEntity.badRequest().body(Map.of("error", "El nuevo correo debe ser diferente"));
+        if (rateLimiter.isLocked(user.getEmail()))
+            return ResponseEntity.status(429).body(Map.of("error", "Demasiados intentos. Prueba más tarde."));
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            rateLimiter.recordFailure(user.getEmail());
+            return ResponseEntity.status(403).body(Map.of("error", "Contraseña incorrecta"));
+        }
+        rateLimiter.clear(user.getEmail());
+        if (userRepository.findByEmail(desired).isPresent())
+            return ResponseEntity.status(409).body(Map.of("error", "El correo ya está registrado"));
+        user.setEmail(desired);
+        user.setTokenVersion((user.getTokenVersion() == null ? 0 : user.getTokenVersion()) + 1);
+        // @PreUpdate regenerates the encrypted email's deterministic lookup.
+        userRepository.saveAndFlush(user);
+        return ResponseEntity.ok(Map.of("status", "email_changed", "logoutRequired", true));
     }
 
     @PostMapping("/revoke-sessions")

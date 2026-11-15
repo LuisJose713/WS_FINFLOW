@@ -154,6 +154,60 @@ class AuthControllerValidationTest {
         verify(users, never()).save(any());
     }
 
+    private static User emailUser() {
+        User user = new User();
+        user.setId(77L);
+        user.setEmail("person@example.com");
+        user.setPassword(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("current-password"));
+        user.setTokenVersion(3);
+        return user;
+    }
+
+    @Test void emailChangeRequiresConfirmation() {
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("person@example.com", null);
+        var response = controller.changeEmail(auth,
+            new AuthController.ChangeEmailRequest("password", "new@example.com", "other@example.com"));
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verifyNoInteractions(users);
+    }
+
+    @Test void emailChangeRejectsWrongPassword() {
+        User user = emailUser();
+        when(users.findByEmail("person@example.com")).thenReturn(Optional.of(user));
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("person@example.com", null);
+        var response = controller.changeEmail(auth,
+            new AuthController.ChangeEmailRequest("invalid", "new@example.com", "new@example.com"));
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("person@example.com", user.getEmail());
+        verify(limiter).recordFailure("person@example.com");
+        verify(users, never()).saveAndFlush(any());
+    }
+
+    @Test void emailChangeRejectsDuplicateWithoutSessionRotation() {
+        User user = emailUser();
+        when(users.findByEmail("person@example.com")).thenReturn(Optional.of(user));
+        when(users.findByEmail("new@example.com")).thenReturn(Optional.of(new User()));
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("person@example.com", null);
+        var response = controller.changeEmail(auth,
+            new AuthController.ChangeEmailRequest("current-password", "new@example.com", "new@example.com"));
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(3, user.getTokenVersion());
+        verify(users, never()).saveAndFlush(any());
+    }
+
+    @Test void emailChangeRotatesSessionVersion() {
+        User user = emailUser();
+        when(users.findByEmail("person@example.com")).thenReturn(Optional.of(user));
+        var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("person@example.com", null);
+        var response = controller.changeEmail(auth,
+            new AuthController.ChangeEmailRequest("current-password", " NEW@example.com ", "new@example.com"));
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("new@example.com", user.getEmail());
+        assertEquals(4, user.getTokenVersion());
+        assertEquals(Boolean.TRUE, ((Map<?, ?>) response.getBody()).get("logoutRequired"));
+        verify(users).saveAndFlush(user);
+    }
+
     @Test
     void loginRejectsIgnoredSuffixesWithoutChangingExistingBcryptHashes() {
         var encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
