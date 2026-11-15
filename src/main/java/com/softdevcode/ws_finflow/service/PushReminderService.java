@@ -63,17 +63,22 @@ public class PushReminderService {
     }
 
     @Scheduled(cron = "0 0 10 * * *", zone = "America/Bogota")
-    public void daily() { send(false); }
+    public void morning() { send(false, 10); }
 
-    public int send(boolean test) {
+    @Scheduled(cron = "0 0 16 * * *", zone = "America/Bogota")
+    public void afternoon() { send(false, 16); }
+
+    public int send(boolean test) { return send(test, 10); }
+
+    private int send(boolean test, int hour) {
         if (!configured()) return 0;
         long ownerId = ownerId(OWNER);
         LocalDate day = LocalDate.now(COLOMBIA);
         if (!test) {
             int claimed = jdbc.update("""
-                INSERT INTO finflow_push_delivery_days(user_id, delivery_day)
-                VALUES (?, ?) ON CONFLICT DO NOTHING
-                """, ownerId, day);
+                INSERT INTO finflow_push_delivery_slots(user_id, delivery_day, delivery_hour)
+                VALUES (?, ?, ?) ON CONFLICT DO NOTHING
+                """, ownerId, day, hour);
             if (claimed == 0) return 0;
         }
         int[] sent = {0};
@@ -83,9 +88,11 @@ public class PushReminderService {
                 try {
                     var push = new PushService(publicKey, privateKey, subject);
                     String payload = mapper.writeValueAsString(Map.of(
-                        "title", "FinFlow · Es hora de registrar tus movimientos 💰",
-                        "body", "Mantén tus finanzas al día. Registra tus ingresos y gastos.",
-                        "url", "/transactions"));
+                        "title", hour == 16 ? "FinFlow · Revisa tus gastos de hoy" : "FinFlow · Es hora de registrar tus movimientos",
+                        "body", hour == 16 ? "¿Cuánto has gastado hoy? Revisa tus movimientos y toma el control." :
+                            "Mantén tus finanzas al día. Registra tus ingresos y gastos.",
+                        "url", "/transactions",
+                        "tag", "finflow-daily-" + hour));
                     var response = push.send(new Notification(endpoint,
                         cipher.decrypt("finflow_push_subscriptions.p256dh",rs.getString(2)),
                         cipher.decrypt("finflow_push_subscriptions.auth",rs.getString(3)),payload));
