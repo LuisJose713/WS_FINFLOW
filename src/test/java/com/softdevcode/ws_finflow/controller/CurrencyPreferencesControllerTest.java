@@ -24,7 +24,8 @@ class CurrencyPreferencesControllerTest {
         u.setUsername("Currency test " + UUID.randomUUID());
         u.setPassword("synthetic-test-hash");
         users.saveAndFlush(u);
-        return new UsernamePasswordAuthenticationToken(u.getEmail(), null);
+        return new UsernamePasswordAuthenticationToken(u.getEmail(), null,
+            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
     }
 
     @Test void userDefaultPersistsAndNeverChangesOtherAccounts() {
