@@ -27,6 +27,8 @@ class MonthlyBudgetOverviewTest {
     @Mock CategoryRepository categories;
     @Mock CategoryAccessValidator validator;
     @Mock JdbcTemplate jdbc;
+    @org.mockito.Spy com.softdevcode.ws_finflow.security.FieldCipher cipher =
+        new com.softdevcode.ws_finflow.security.FieldCipher("",false);
     @InjectMocks MonthlyBudgetService service;
 
     private void setupRollup(String amount) {
@@ -43,8 +45,8 @@ class MonthlyBudgetOverviewTest {
         cat.setType("Expense");
         when(budgets.findByUserIdAndYearAndMonthOrderByIdAsc(7, 2026, 11)).thenReturn(List.of(budget));
         when(categories.findVisibleTo(7)).thenReturn(List.of(cat));
-        when(jdbc.queryForList(anyString(), eq(7), any(Timestamp.class), any(Timestamp.class)))
-            .thenReturn(List.of(Map.of("category_id", 9L, "spent", new BigDecimal(amount))));
+        when(jdbc.queryForList(anyString(), eq(7)))
+            .thenReturn(List.of(Map.of("category_id", 9L, "spent", new BigDecimal(amount),"movement_date","2026-11-12T00:00:00")));
     }
 
     @Test void lowerThanEightyPercentDoesNotWarnWhenRounded() {
@@ -53,9 +55,7 @@ class MonthlyBudgetOverviewTest {
         assertEquals("ok", overview.status());
         assertEquals(79, overview.percentUsed());
         assertEquals(new BigDecimal("20000.01"), overview.remaining());
-        verify(jdbc).queryForList(contains("WHERE user_id = ?"), eq(7),
-            eq(Timestamp.valueOf("2026-11-01 00:00:00")),
-            eq(Timestamp.valueOf("2026-12-01 00:00:00")));
+        verify(jdbc).queryForList(contains("WHERE user_id = ?"), eq(7));
     }
 
     @Test void eightyPercentWarnsExactly() {

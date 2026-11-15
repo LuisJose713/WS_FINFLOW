@@ -34,6 +34,7 @@ public class MonthlyBudgetService {
     private final CategoryRepository categories;
     private final CategoryAccessValidator categoryValidator;
     private final JdbcTemplate jdbc;
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
 
     @Transactional(readOnly = true)
     public List<BudgetOverview> list(Integer userId, Integer year, Integer month) {
@@ -47,27 +48,31 @@ public class MonthlyBudgetService {
         LocalDateTime start = period.atDay(1).atStartOfDay();
         LocalDateTime end = period.plusMonths(1).atDay(1).atStartOfDay();
         String sql = """
-            SELECT category_id, COALESCE(ROUND(SUM(amount::numeric),2),0)::numeric AS spent
+            SELECT category_id, amount AS spent, date AS movement_date
             FROM transactions
             WHERE user_id = ? AND type = 'expense'
               AND (status = 'completed' OR status IS NULL)
               AND (TRIM(COALESCE(currency, 'COP')) = 'COP')
-              AND date >= ? AND date < ? AND category_id IS NOT NULL
-            GROUP BY category_id
+              AND category_id IS NOT NULL
             """;
-        List<Map<String, Object>> rows = jdbc.queryForList(sql,
-                userId, Timestamp.valueOf(start), Timestamp.valueOf(end));
+        List<Map<String, Object>> rows = jdbc.queryForList(sql,userId);
         Map<Long, BigDecimal> spentByCategory = new HashMap<>();
         for (var row : rows) {
+            Object date = row.get("movement_date");
+            if(date == null) continue;
+            LocalDateTime movementDate=LocalDateTime.parse(cipher.decrypt("transactions.date",date.toString()).replace(' ','T'));
+            if(movementDate.isBefore(start) || !movementDate.isBefore(end)) continue;
             Object raw = row.get("spent");
             if (row.get("category_id") instanceof Number id && raw != null) {
-                spentByCategory.put(id.longValue(), new BigDecimal(raw.toString()).setScale(2, RoundingMode.HALF_UP));
+                spentByCategory.merge(id.longValue(), new BigDecimal(
+                    cipher.decrypt("transactions.amount",raw.toString())), BigDecimal::add);
             }
         }
         Map<Long, Category> visibleCategories = categories.findVisibleTo(userId).stream()
                 .collect(Collectors.toMap(Category::getId, Function.identity(), (first, second) -> first));
         return mine.stream().map(budget -> {
-            BigDecimal spent = spentByCategory.getOrDefault(budget.getCategoryId(), BigDecimal.ZERO.setScale(2));
+            BigDecimal spent = spentByCategory.getOrDefault(budget.getCategoryId(), BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP);
             BigDecimal limit = budget.getLimitAmount();
             BigDecimal remaining = limit.subtract(spent);
             // Floor the displayed percentage: 79.99% must not be labeled as 80%.

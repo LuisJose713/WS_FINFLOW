@@ -23,9 +23,8 @@ public class RecurringScheduler {
                initialDelayString="${finflow.recurring.initial-delay-ms:60000}")
     public void checkDue() {
         List<Integer> owners=jdbc.query("""
-            SELECT DISTINCT user_id FROM recurring_rules WHERE active=true AND next_due_date<=?
-            ORDER BY user_id LIMIT 200
-            """,(rs,i)->rs.getInt(1),Date.valueOf(LocalDate.now(ZoneId.of("America/Bogota"))));
+            SELECT DISTINCT user_id FROM recurring_rules WHERE active=true ORDER BY user_id
+            """,(rs,i)->rs.getInt(1));
         for(Integer owner:owners) {
             try { service.processDue(owner); }
             catch(Exception ex) { log.error("Recurring rule batch failed; will retry later"); }

@@ -1,9 +1,11 @@
 package com.softdevcode.ws_finflow.entity;
 
 import jakarta.persistence.*;
+import com.softdevcode.ws_finflow.security.EncryptedFields;
 import java.time.LocalDateTime;
 
 @Entity
+@EntityListeners(com.softdevcode.ws_finflow.security.ProtectedLookupListener.class)
 @Table(name = "categories")
 public class Category {
     @Id
@@ -11,7 +13,13 @@ public class Category {
     private Long id;
 
     @Column(nullable = false)
+    @Convert(converter = EncryptedFields.CategoryName.class)
     private String name;
+    @Column(name = "name_lookup")
+    private String nameLookup;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public String getNameLookup() { return nameLookup; }
+    public void setNameLookup(String value) { nameLookup = value; }
 
     @Column(nullable = false)
     private String type; // "Income" o "Expense"

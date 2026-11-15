@@ -21,6 +21,7 @@ public class RecurringRuleService {
     private final JdbcTemplate jdbc;
     private final CategoryAccessValidator categories;
     private final FinancialAccountService accounts;
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
     private static final ZoneId ZONE = ZoneId.of("America/Bogota");
 
     public record Rule(Long id,String title,BigDecimal amount,String type,Long categoryId,
@@ -33,11 +34,14 @@ public class RecurringRuleService {
     public List<Rule> list(Integer userId) {
         return jdbc.query("""
             SELECT id,title,amount,type,category_id,account_id,day_of_month,next_due_date,active
-            FROM recurring_rules WHERE user_id=? ORDER BY active DESC,next_due_date ASC,id ASC
-            """,(rs,i)->new Rule(rs.getLong("id"),rs.getString("title"),rs.getBigDecimal("amount"),
+            FROM recurring_rules WHERE user_id=?
+            """,(rs,i)->new Rule(rs.getLong("id"),cipher.decrypt("recurring_rules.title",rs.getString("title")),
+                new BigDecimal(cipher.decrypt("recurring_rules.amount",rs.getString("amount"))),
                 rs.getString("type"),rs.getLong("category_id"),
-                (Long)rs.getObject("account_id"),rs.getInt("day_of_month"),
-                rs.getDate("next_due_date").toLocalDate(),rs.getBoolean("active")),userId);
+                (Long)rs.getObject("account_id"),Integer.parseInt(cipher.decrypt("recurring_rules.day_of_month",rs.getString("day_of_month"))),
+                LocalDate.parse(cipher.decrypt("recurring_rules.next_due_date",rs.getString("next_due_date"))),rs.getBoolean("active")),userId)
+                .stream().sorted(java.util.Comparator.comparing(Rule::active).reversed()
+                    .thenComparing(Rule::nextDueDate).thenComparing(Rule::id)).toList();
     }
 
     @Transactional
@@ -61,8 +65,10 @@ public class RecurringRuleService {
             INSERT INTO recurring_rules(user_id,title,amount,type,category_id,account_id,
                   day_of_month,next_due_date,currency)
             VALUES(?,?,?,?,?,?,?,?,'COP') RETURNING id
-            """,Long.class,userId,title,amount,input.type(),input.categoryId(),
-                    input.accountId(),input.dayOfMonth(),Date.valueOf(due));
+            """,Long.class,userId,cipher.encrypt("recurring_rules.title",title),
+                    cipher.encrypt("recurring_rules.amount",amount.toPlainString()),input.type(),input.categoryId(),
+                    input.accountId(),cipher.encrypt("recurring_rules.day_of_month",Integer.toString(input.dayOfMonth())),
+                    cipher.encrypt("recurring_rules.next_due_date",due.toString()));
         return list(userId).stream().filter(r->r.id().equals(id)).findFirst().orElseThrow();
     }
 
@@ -90,13 +96,15 @@ public class RecurringRuleService {
         LocalDate today=LocalDate.now(ZONE);
         List<Rule> due=jdbc.query("""
             SELECT id,title,amount,type,category_id,account_id,day_of_month,next_due_date,active
-            FROM recurring_rules WHERE user_id=? AND active AND next_due_date<=?
-            ORDER BY next_due_date ASC,id ASC FOR UPDATE SKIP LOCKED
-            """,(rs,i)->new Rule(rs.getLong("id"),rs.getString("title"),rs.getBigDecimal("amount"),
+            FROM recurring_rules WHERE user_id=? AND active
+            ORDER BY id ASC FOR UPDATE SKIP LOCKED
+            """,(rs,i)->new Rule(rs.getLong("id"),cipher.decrypt("recurring_rules.title",rs.getString("title")),
+                new BigDecimal(cipher.decrypt("recurring_rules.amount",rs.getString("amount"))),
                 rs.getString("type"),rs.getLong("category_id"),
-                (Long)rs.getObject("account_id"),rs.getInt("day_of_month"),
-                rs.getDate("next_due_date").toLocalDate(),rs.getBoolean("active")),
-            userId,Date.valueOf(today));
+                (Long)rs.getObject("account_id"),Integer.parseInt(cipher.decrypt("recurring_rules.day_of_month",rs.getString("day_of_month"))),
+                LocalDate.parse(cipher.decrypt("recurring_rules.next_due_date",rs.getString("next_due_date"))),rs.getBoolean("active")),
+            userId).stream().filter(r->!r.nextDueDate().isAfter(today))
+                .sorted(java.util.Comparator.comparing(Rule::nextDueDate).thenComparing(Rule::id)).toList();
         int created=0;
         for(Rule r:due) {
             LocalDate next=r.nextDueDate();
@@ -120,15 +128,16 @@ public class RecurringRuleService {
                         INSERT INTO transactions(user_id,amount,type,category_id,account_id,
                               description,date,currency,status)
                         VALUES(?,?,?,?,?,? ,?,'COP','completed') RETURNING id
-                        """,Long.class,userId,r.amount(),r.type(),r.categoryId(),r.accountId(),
-                            r.title(),Timestamp.valueOf(next.atStartOfDay()));
+                        """,Long.class,userId,cipher.encrypt("transactions.amount",r.amount().toPlainString()),r.type(),r.categoryId(),r.accountId(),
+                            cipher.encrypt("transactions.description",r.title()),
+                            cipher.encrypt("transactions.date",next.atStartOfDay().toString()));
                     jdbc.update("UPDATE recurring_executions SET transaction_id=? WHERE id=? AND user_id=?",
                             transactionId,inserted.get(0).get("id"),userId);
                     created++;
                 }
                 next=next.plusMonths(1);
                 jdbc.update("UPDATE recurring_rules SET next_due_date=? WHERE id=? AND user_id=?",
-                            Date.valueOf(next),r.id(),userId);
+                            cipher.encrypt("recurring_rules.next_due_date",next.toString()),r.id(),userId);
             }
         }
         return created;

@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class TransactionCsvSecurityTest {
     @Mock EntityManager entityManager;
-    @Mock TypedQuery<Transaction> query;
+    @Mock com.softdevcode.ws_finflow.repository.TransactionRepository repository;
     @InjectMocks TransactionService service;
 
     private Transaction transaction;
@@ -39,8 +39,7 @@ class TransactionCsvSecurityTest {
         transaction.setDate(LocalDateTime.of(2026, 11, 11, 12, 0));
         transaction.setCurrency("COP");
         transaction.setStatus("completed");
-        when(entityManager.createQuery(anyString(), eq(Transaction.class))).thenReturn(query);
-        when(query.getResultList()).thenReturn(List.of(transaction));
+        when(repository.findByUserIdOrderByDateDesc(42)).thenReturn(List.of(transaction));
     }
 
     @ParameterizedTest
@@ -57,7 +56,7 @@ class TransactionCsvSecurityTest {
 
         assertTrue(csv.endsWith("7," + protectedField + "," + protectedField
                 + ",-12.5,3,\"2026-11-11\"," + protectedField + "," + protectedField + "\n"));
-        verify(query).setParameter("userId", 42);
+        verify(repository).findByUserIdOrderByDateDesc(42);
     }
 
     @Test

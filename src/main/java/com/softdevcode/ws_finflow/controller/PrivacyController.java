@@ -24,6 +24,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 @RequestMapping("/privacy")
 public class PrivacyController {
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
     private final JdbcTemplate jdbc;
     private final UserRepository users;
     private final PrivacyPolicySettings settings;
@@ -131,7 +132,8 @@ public class PrivacyController {
         Long id = jdbc.queryForObject("""
               INSERT INTO privacy_rights_requests(user_id, request_type, description)
               VALUES (?, ?, ?) RETURNING id
-            """, Long.class, user.getId(), request.type(), description);
+            """, Long.class, user.getId(), request.type(),
+                cipher.encrypt("privacy_rights_requests.description",description));
         return Map.of("id", id, "status", "PENDING",
                "message", "Solicitud registrada para revisión; no implica eliminación automática");
     }
@@ -139,10 +141,12 @@ public class PrivacyController {
     @GetMapping("/rights-requests")
     public List<Map<String, Object>> rightsRequests(Authentication authentication) {
         User user = actor(authentication);
-        return jdbc.queryForList("""
+        var result = jdbc.queryForList("""
              SELECT id, request_type, description, status, created_at
              FROM privacy_rights_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
             """, user.getId());
+        result.forEach(row -> row.put("description",cipher.decrypt("privacy_rights_requests.description",(String)row.get("description"))));
+        return result;
     }
 
     private void ensurePolicyPublished() {

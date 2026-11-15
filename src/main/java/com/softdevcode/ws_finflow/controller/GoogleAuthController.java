@@ -29,14 +29,17 @@ public class GoogleAuthController {
     private final JdbcTemplate jdbc;
     private final JwtUtil jwt;
     private final RefreshTokenService refreshTokens;
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
 
     public record GoogleCredential(String idToken) {}
     public record GoogleStatus(boolean linked, String email) {}
 
     public GoogleAuthController(GoogleIdTokenVerifier verifier, UserRepository users,
-                                JdbcTemplate jdbc, JwtUtil jwt, RefreshTokenService refreshTokens) {
+                                JdbcTemplate jdbc, JwtUtil jwt, RefreshTokenService refreshTokens,
+                                com.softdevcode.ws_finflow.security.FieldCipher cipher) {
         this.verifier = verifier; this.users = users; this.jdbc = jdbc;
         this.jwt = jwt; this.refreshTokens = refreshTokens;
+        this.cipher = cipher;
     }
 
     @GetMapping("/config")
@@ -49,7 +52,7 @@ public class GoogleAuthController {
         var google = verifier.verify(request == null ? null : request.idToken());
         List<Long> ids = jdbc.queryForList(
             "SELECT user_id FROM public.google_account_links WHERE google_sub = ?",
-            Long.class, google.sub());
+            Long.class, cipher.lookup("google_account_links.google_sub",google.sub()));
         if (ids.isEmpty()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                 "code", "GOOGLE_LINK_REQUIRED",
@@ -70,7 +73,8 @@ public class GoogleAuthController {
         List<String> emails = jdbc.queryForList(
             "SELECT google_email FROM public.google_account_links WHERE user_id = ?",
             String.class, user.getId());
-        return new GoogleStatus(!emails.isEmpty(), emails.isEmpty() ? "" : emails.getFirst());
+        return new GoogleStatus(!emails.isEmpty(), emails.isEmpty() ? "" :
+            cipher.decrypt("google_account_links.google_email",emails.getFirst()));
     }
 
     @PostMapping("/link")
@@ -83,16 +87,19 @@ public class GoogleAuthController {
                 "El correo de Google debe coincidir con el correo de tu cuenta FinFlow");
         }
         List<Long> holders = jdbc.queryForList(
-            "SELECT user_id FROM public.google_account_links WHERE google_sub = ?", Long.class, google.sub());
+            "SELECT user_id FROM public.google_account_links WHERE google_sub = ?", Long.class,
+                cipher.lookup("google_account_links.google_sub",google.sub()));
         if (!holders.isEmpty() && !holders.getFirst().equals(user.getId()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Esta cuenta de Google ya está vinculada");
         List<String> current = jdbc.queryForList(
             "SELECT google_sub FROM public.google_account_links WHERE user_id = ?", String.class, user.getId());
-        if (!current.isEmpty() && !current.getFirst().equals(google.sub()))
+        if (!current.isEmpty() && !current.getFirst().equals(cipher.lookup("google_account_links.google_sub",google.sub())))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Desvincula primero la cuenta de Google anterior");
         if (holders.isEmpty()) {
-            jdbc.update("INSERT INTO public.google_account_links(google_sub,user_id,google_email) VALUES (?,?,?)",
-                google.sub(), user.getId(), google.email());
+            jdbc.update("INSERT INTO public.google_account_links(google_sub,user_id,google_email,google_sub_cipher) VALUES (?,?,?,?)",
+                cipher.lookup("google_account_links.google_sub",google.sub()), user.getId(),
+                cipher.encrypt("google_account_links.google_email",google.email()),
+                cipher.encrypt("google_account_links.google_sub",google.sub()));
         }
         return new GoogleStatus(true, google.email());
     }

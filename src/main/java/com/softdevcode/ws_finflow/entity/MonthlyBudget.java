@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.entity;
 
 import jakarta.persistence.*;
+import com.softdevcode.ws_finflow.security.EncryptedFields;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -25,7 +26,8 @@ public class MonthlyBudget {
     @Column(name = "budget_month", nullable = false)
     private Integer month;
 
-    @Column(name = "limit_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "limit_amount", nullable = false)
+    @Convert(converter = EncryptedFields.BudgetLimit.class)
     private BigDecimal limitAmount;
 
     @Column(name = "created_at", nullable = false)

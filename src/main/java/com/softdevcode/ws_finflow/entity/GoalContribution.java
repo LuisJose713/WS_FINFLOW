@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.entity;
 
 import jakarta.persistence.*;
+import com.softdevcode.ws_finflow.security.EncryptedFields;
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,9 +19,11 @@ public class GoalContribution {
     private Long userId;
 
     @Column(nullable = false)
+    @Convert(converter = EncryptedFields.ContributionAmount.class)
     private Double amount;
 
     @Column
+    @Convert(converter = EncryptedFields.ContributionNote.class)
     private String note;
 
     @Column(name = "created_at")

@@ -30,7 +30,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class FinFlowReportExportTest {
     @Mock EntityManager em;
-    @Mock TypedQuery<Transaction> query;
+    @Mock com.softdevcode.ws_finflow.repository.TransactionRepository repository;
     @Mock CategoryRepository categories;
     @InjectMocks TransactionService service;
 
@@ -53,8 +53,7 @@ class FinFlowReportExportTest {
         tx.setDate(LocalDateTime.of(2026, 11, 11, 10, 0));
         tx.setDescription("Taxi");
         tx.setStatus("completed");
-        when(em.createQuery(anyString(), eq(Transaction.class))).thenReturn(query);
-        when(query.getResultList()).thenReturn(List.of(tx));
+        when(repository.findByUserIdOrderByDateDesc(42)).thenReturn(List.of(tx));
     }
 
     @Test

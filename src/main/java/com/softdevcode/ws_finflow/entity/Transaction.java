@@ -1,6 +1,7 @@
     package com.softdevcode.ws_finflow.entity;
 
     import jakarta.persistence.*;
+import com.softdevcode.ws_finflow.security.EncryptedFields;
     import java.time.LocalDateTime;
 
 
@@ -16,6 +17,7 @@
         private Integer userId;
 
         @Column(nullable = false)
+        @Convert(converter = EncryptedFields.TransactionAmount.class)
         private Double amount;
 
         @Column(name = "type", nullable = false)
@@ -27,9 +29,11 @@
         @Column(name = "account_id")
         private Long accountId;
 
+        @Convert(converter = EncryptedFields.TransactionDescription.class)
         private String description;
 
         @Column(name = "date")
+        @Convert(converter = EncryptedFields.TransactionDate.class)
         private LocalDateTime date;
 
         @Column(length = 3)

@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.entity;
 
 import jakarta.persistence.*;
+import com.softdevcode.ws_finflow.security.EncryptedFields;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -16,21 +17,26 @@ public class Goal {
     private Long userId;
 
     @Column(name = "title")
+    @Convert(converter = EncryptedFields.GoalTitle.class)
     private String title;
 
     @Column(name = "target_amount")
+    @Convert(converter = EncryptedFields.GoalTarget.class)
     private Double targetAmount;
 
     @Column(name = "current_amount")
+    @Convert(converter = EncryptedFields.GoalCurrent.class)
     private Double currentAmount = 0.0;
 
     @Column(name = "deadline")
+    @Convert(converter = EncryptedFields.GoalDeadline.class)
     private LocalDate deadline;
 
     @Column(name = "status")
     private String status = "active"; // active | completed | cancelled
 
     @Column(name = "description")
+    @Convert(converter = EncryptedFields.GoalDescription.class)
     private String description;
 
     @Column(name = "created_at")

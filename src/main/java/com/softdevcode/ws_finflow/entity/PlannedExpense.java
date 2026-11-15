@@ -1,6 +1,7 @@
 package com.softdevcode.ws_finflow.entity;
 
 import jakarta.persistence.*;
+import com.softdevcode.ws_finflow.security.EncryptedFields;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,18 +18,22 @@ public class PlannedExpense {
     private Integer userId;
 
     @Column(nullable = false)
+    @Convert(converter = EncryptedFields.PlannedTitle.class)
     private String title;
 
-    @Column(nullable = false, precision = 15, scale = 2)
+    @Column(nullable = false)
+    @Convert(converter = EncryptedFields.PlannedAmount.class)
     private BigDecimal amount;
 
     @Column(name = "category_id")
     private Long categoryId;
 
     @Column(name = "due_date")
+    @Convert(converter = EncryptedFields.PlannedDue.class)
     private LocalDate dueDate;
 
     @Column
+    @Convert(converter = EncryptedFields.PlannedNotes.class)
     private String notes;
 
     @Column(nullable = false)
@@ -38,6 +43,7 @@ public class PlannedExpense {
     private Long executedTransactionId;
 
     @Column(name = "remind_at")
+    @Convert(converter = EncryptedFields.PlannedReminder.class)
     private LocalDate remindAt;
 
     @Column(name = "created_at")

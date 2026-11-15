@@ -18,6 +18,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class FinancialAccountService {
     private final JdbcTemplate jdbc;
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
 
     public record AccountView(Long id, String name, String type, String currency,
                               BigDecimal openingBalance, BigDecimal balance, boolean archived) {}
@@ -33,24 +34,42 @@ public class FinancialAccountService {
 
     @Transactional(readOnly = true)
     public List<AccountView> list(Integer userId) {
+        // Sum decrypted monetary values only inside the application. No clear amounts
+        // or encryption keys are sent to PostgreSQL, including during reporting.
+        Map<Long, Map<String,BigDecimal>> movements = new java.util.HashMap<>();
+        Map<Long, BigDecimal> transfers = new java.util.HashMap<>();
+        jdbc.query("""
+            SELECT account_id,amount,type,currency FROM transactions
+            WHERE user_id=? AND account_id IS NOT NULL
+              AND type IN ('income','expense') AND (status='completed' OR status IS NULL)
+            """, rs -> {
+                BigDecimal value = new BigDecimal(cipher.decrypt("transactions.amount", rs.getString("amount")));
+                if (!"income".equals(rs.getString("type"))) value = value.negate();
+                String currency = rs.getString("currency");
+                String key = currency == null ? "COP" : currency.trim();
+                // Preserve the same currency rule as the former SQL aggregate.
+                movements.computeIfAbsent(rs.getLong("account_id"),ignored -> new java.util.HashMap<>())
+                    .merge(key,value,BigDecimal::add);
+            }, userId);
+        jdbc.query("SELECT from_account_id,to_account_id,amount FROM account_transfers WHERE user_id=?",
+            rs -> {
+                BigDecimal value = new BigDecimal(cipher.decrypt("account_transfers.amount", rs.getString("amount")));
+                transfers.merge(rs.getLong("from_account_id"), value.negate(), BigDecimal::add);
+                transfers.merge(rs.getLong("to_account_id"), value, BigDecimal::add);
+            }, userId);
         return jdbc.query("""
-            SELECT a.id,a.name,a.account_type,a.currency,a.opening_balance,a.archived,
-                   ROUND(a.opening_balance
-                    + COALESCE((SELECT SUM(CASE WHEN t.type='income' THEN t.amount::numeric
-                                                  ELSE -t.amount::numeric END)
-                       FROM transactions t WHERE t.user_id=a.user_id AND t.account_id=a.id
-                       AND t.type IN ('income','expense')
-                       AND (t.status='completed' OR t.status IS NULL)
-                       AND TRIM(COALESCE(t.currency,'COP'))=a.currency),0)
-                    + COALESCE((SELECT SUM(CASE WHEN tr.to_account_id=a.id THEN tr.amount ELSE -tr.amount END)
-                       FROM account_transfers tr WHERE tr.user_id=a.user_id
-                       AND (tr.from_account_id=a.id OR tr.to_account_id=a.id)),0),2) AS balance
-            FROM financial_accounts a WHERE a.user_id=?
-            ORDER BY a.archived ASC,a.name ASC,a.id ASC
-            """, (rs,i) -> new AccountView(rs.getLong("id"),rs.getString("name"),
-                rs.getString("account_type"),rs.getString("currency"),
-                rs.getBigDecimal("opening_balance"),rs.getBigDecimal("balance"),
-                rs.getBoolean("archived")),userId);
+            SELECT id,name,account_type,currency,opening_balance,archived
+            FROM financial_accounts WHERE user_id=?
+            """, (rs,i) -> {
+                BigDecimal opening = new BigDecimal(cipher.decrypt("financial_accounts.opening_balance",rs.getString("opening_balance")));
+                long id = rs.getLong("id");
+                return new AccountView(id,cipher.decrypt("financial_accounts.name",rs.getString("name")),
+                    rs.getString("account_type"),rs.getString("currency"),opening,
+                    opening.add(movements.getOrDefault(id,Map.of()).getOrDefault(rs.getString("currency"),BigDecimal.ZERO))
+                        .add(transfers.getOrDefault(id,BigDecimal.ZERO)).setScale(2,RoundingMode.HALF_UP),
+                    rs.getBoolean("archived"));
+            },userId).stream().sorted(java.util.Comparator.comparing(AccountView::archived)
+                .thenComparing(AccountView::name).thenComparing(AccountView::id)).toList();
     }
 
     @Transactional
@@ -64,9 +83,11 @@ public class FinancialAccountService {
         BigDecimal initial = amount(request.openingBalance()==null?BigDecimal.ZERO:request.openingBalance(),true);
         try {
             Long id = jdbc.queryForObject("""
-                INSERT INTO financial_accounts(user_id,name,account_type,currency,opening_balance)
-                VALUES(?,?,?,?,?) RETURNING id
-                """,Long.class,userId,name,type,currency,initial);
+                INSERT INTO financial_accounts(user_id,name,account_type,currency,opening_balance,name_lookup)
+                VALUES(?,?,?,?,?,?) RETURNING id
+                """,Long.class,userId,cipher.encrypt("financial_accounts.name",name),type,currency,
+                cipher.encrypt("financial_accounts.opening_balance",initial.toPlainString()),
+                cipher.lookup("financial_accounts.name",name.toLowerCase(java.util.Locale.ROOT)));
             return list(userId).stream().filter(x -> x.id().equals(id)).findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR));
         } catch(DataIntegrityViolationException ex) {
@@ -78,8 +99,10 @@ public class FinancialAccountService {
     public AccountView update(Integer userId, Long id, AccountUpdate request) {
         if(request==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Datos requeridos");
         try {
-            int changed=jdbc.update("UPDATE financial_accounts SET name=?,account_type=? WHERE id=? AND user_id=?",
-                name(request.name()),type(request.type()),id,userId);
+            String checkedName = name(request.name());
+            int changed=jdbc.update("UPDATE financial_accounts SET name=?,account_type=?,name_lookup=? WHERE id=? AND user_id=?",
+                cipher.encrypt("financial_accounts.name",checkedName),type(request.type()),
+                cipher.lookup("financial_accounts.name",checkedName.toLowerCase(java.util.Locale.ROOT)),id,userId);
             if(changed==0) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Cuenta no encontrada");
             return list(userId).stream().filter(x -> x.id().equals(id)).findFirst().orElseThrow();
         } catch(DataIntegrityViolationException ex) {
@@ -135,7 +158,10 @@ public class FinancialAccountService {
         Long id=jdbc.queryForObject("""
             INSERT INTO account_transfers(user_id,from_account_id,to_account_id,amount,transfer_date,note)
             VALUES(?,?,?,?,?,?) RETURNING id
-            """,Long.class,userId,request.fromAccountId(),request.toAccountId(),value,date,note);
+            """,Long.class,userId,request.fromAccountId(),request.toAccountId(),
+            cipher.encrypt("account_transfers.amount",value.toPlainString()),
+            cipher.encrypt("account_transfers.transfer_date",date.toString()),
+            cipher.encrypt("account_transfers.note",note));
         return new TransferView(id,request.fromAccountId(),request.toAccountId(),value,date,note);
     }
 
@@ -143,11 +169,13 @@ public class FinancialAccountService {
     public List<TransferView> transfers(Integer userId) {
         return jdbc.query("""
             SELECT id,from_account_id,to_account_id,amount,transfer_date,note
-            FROM account_transfers WHERE user_id=? ORDER BY transfer_date DESC,id DESC
-            LIMIT 100
+            FROM account_transfers WHERE user_id=?
             """,(rs,i)->new TransferView(rs.getLong("id"),rs.getLong("from_account_id"),
-                rs.getLong("to_account_id"),rs.getBigDecimal("amount"),
-                rs.getDate("transfer_date").toLocalDate(),rs.getString("note")),userId);
+                rs.getLong("to_account_id"),new BigDecimal(cipher.decrypt("account_transfers.amount",rs.getString("amount"))),
+                LocalDate.parse(cipher.decrypt("account_transfers.transfer_date",rs.getString("transfer_date"))),
+                cipher.decrypt("account_transfers.note",rs.getString("note"))),userId).stream()
+                .sorted(java.util.Comparator.comparing(TransferView::date).reversed()
+                    .thenComparing(TransferView::id,java.util.Comparator.reverseOrder())).limit(100).toList();
     }
 
     private String name(String value) {

@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 public class BillingController {
     private final JdbcTemplate jdbc;
     private final UserRepository users;
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
     private static final Pattern PROMO_CODE = Pattern.compile("[A-Z0-9_-]{4,32}");
 
     public record Plan(String code, String title, String description, long priceCop, boolean active, int sortOrder) {}
@@ -241,7 +242,8 @@ public class BillingController {
             ON CONFLICT(user_id) DO UPDATE SET plan_code=excluded.plan_code,
               source=excluded.source,valid_until=excluded.valid_until,
               assigned_by=excluded.assigned_by,reason=excluded.reason,updated_at=now()
-            """, input.userId(),input.planCode(),end == null ? null : Timestamp.from(end),admin.getId(),reason);
+            """, input.userId(),input.planCode(),end == null ? null : Timestamp.from(end),admin.getId(),
+                cipher.encrypt("billing_entitlements.reason",reason));
         audit(admin,"ACCESS_GRANTED",String.valueOf(input.userId()),
                 input.planCode()+" · "+reason);
         Map<String,Object> result = new LinkedHashMap<>();
@@ -289,6 +291,7 @@ public class BillingController {
     }
     private void audit(User admin,String action,String subject,String details) {
         jdbc.update("INSERT INTO billing_admin_audit(actor_user_id,action,subject,details) VALUES (?,?,?,?)",
-                admin.getId(),action,subject,details);
+                admin.getId(),action,cipher.encrypt("billing_admin_audit.subject",subject),
+                cipher.encrypt("billing_admin_audit.details",details));
     }
 }

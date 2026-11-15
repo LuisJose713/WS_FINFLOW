@@ -22,12 +22,14 @@ public class PushReminderService {
     private final JdbcTemplate jdbc;
     private final UserRepository users;
     private final ObjectMapper mapper;
+    private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
     @Value("${FINFLOW_VAPID_PUBLIC_KEY:}") private String publicKey;
     @Value("${FINFLOW_VAPID_PRIVATE_KEY:}") private String privateKey;
     @Value("${FINFLOW_VAPID_SUBJECT:mailto:notifications@finflow.app}") private String subject;
 
-    public PushReminderService(JdbcTemplate jdbc, UserRepository users, ObjectMapper mapper) {
-        this.jdbc = jdbc; this.users = users; this.mapper = mapper;
+    public PushReminderService(JdbcTemplate jdbc, UserRepository users, ObjectMapper mapper,
+                               com.softdevcode.ws_finflow.security.FieldCipher cipher) {
+        this.jdbc = jdbc; this.users = users; this.mapper = mapper; this.cipher = cipher;
     }
 
     public boolean configured() { return !publicKey.isBlank() && !privateKey.isBlank(); }
@@ -45,15 +47,19 @@ public class PushReminderService {
                 || p256dh == null || p256dh.length() > 256 || auth == null || auth.length() > 256)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Suscripción inválida");
         jdbc.update("""
-            INSERT INTO finflow_push_subscriptions(user_id, endpoint, p256dh, auth)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO finflow_push_subscriptions(user_id, endpoint, endpoint_cipher, p256dh, auth)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id,
-              p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
-            """, userId, endpoint, p256dh, auth);
+              endpoint_cipher = EXCLUDED.endpoint_cipher, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+            """, userId, cipher.lookup("finflow_push_subscriptions.endpoint", endpoint),
+                cipher.encrypt("finflow_push_subscriptions.endpoint",endpoint),
+                cipher.encrypt("finflow_push_subscriptions.p256dh",p256dh),
+                cipher.encrypt("finflow_push_subscriptions.auth",auth));
     }
 
     public void unsubscribe(long userId, String endpoint) {
-        jdbc.update("DELETE FROM finflow_push_subscriptions WHERE user_id = ? AND endpoint = ?", userId, endpoint);
+        jdbc.update("DELETE FROM finflow_push_subscriptions WHERE user_id = ? AND endpoint = ?", userId,
+            cipher.lookup("finflow_push_subscriptions.endpoint",endpoint));
     }
 
     @Scheduled(cron = "0 0 10 * * *", zone = "America/Bogota")
@@ -71,19 +77,22 @@ public class PushReminderService {
             if (claimed == 0) return 0;
         }
         int[] sent = {0};
-        jdbc.query("SELECT endpoint, p256dh, auth FROM finflow_push_subscriptions WHERE user_id = ?",
+        jdbc.query("SELECT endpoint_cipher, p256dh, auth FROM finflow_push_subscriptions WHERE user_id = ?",
             rs -> {
-                String endpoint = rs.getString(1);
+                String endpoint = cipher.decrypt("finflow_push_subscriptions.endpoint",rs.getString(1));
                 try {
                     var push = new PushService(publicKey, privateKey, subject);
                     String payload = mapper.writeValueAsString(Map.of(
                         "title", "FinFlow · Es hora de registrar tus movimientos 💰",
                         "body", "Mantén tus finanzas al día. Registra tus ingresos y gastos.",
                         "url", "/transactions"));
-                    var response = push.send(new Notification(endpoint, rs.getString(2), rs.getString(3), payload));
+                    var response = push.send(new Notification(endpoint,
+                        cipher.decrypt("finflow_push_subscriptions.p256dh",rs.getString(2)),
+                        cipher.decrypt("finflow_push_subscriptions.auth",rs.getString(3)),payload));
                     if (response.getStatusLine().getStatusCode() >= 200 && response.getStatusLine().getStatusCode() < 300) sent[0]++;
                     else if (response.getStatusLine().getStatusCode() == 404 || response.getStatusLine().getStatusCode() == 410)
-                        jdbc.update("DELETE FROM finflow_push_subscriptions WHERE endpoint = ?", endpoint);
+                        jdbc.update("DELETE FROM finflow_push_subscriptions WHERE endpoint = ?",
+                            cipher.lookup("finflow_push_subscriptions.endpoint",endpoint));
                 } catch (Exception ex) {
                     // Failed deliveries must not expose subscription secrets in logs.
                     System.err.println("FinFlow Web Push delivery failed: " + ex.getClass().getSimpleName());
