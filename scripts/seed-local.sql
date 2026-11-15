@@ -4,13 +4,16 @@ INSERT INTO public.categories (name, type, created_at)
 SELECT s.name, s.type, CURRENT_TIMESTAMP
 FROM (VALUES
   ('Alimentación','Expense'),
-  ('Vivienda','Expense'),
+  ('Arriendo','Expense'),
   ('Transporte','Expense'),
-  ('Salud','Expense'),
   ('Entretenimiento','Expense'),
+  ('Otros gastos','Expense'),
   ('Salario','Income'),
-  ('Otros ingresos','Income')
+  ('Otros ingresos','Income'),
+  ('Trabajo independiente','Income'),
+  ('Inversiones','Income'),
+  ('Bonificaciones','Income')
 ) AS s(name,type)
 WHERE NOT EXISTS (
-  SELECT 1 FROM public.categories c WHERE c.name = s.name AND c.type = s.type
+  SELECT 1 FROM public.categories c WHERE c.name = s.name AND c.type = s.type AND c.user_id IS NULL
 );
