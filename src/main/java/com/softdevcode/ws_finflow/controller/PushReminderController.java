@@ -39,8 +39,7 @@ public class PushReminderController {
 
     @PostMapping("/test")
     public Map<String, Integer> test(Authentication auth) {
-        owner(auth);
-        return Map.of("acceptedByPushServices", service.send(true));
+        return Map.of("acceptedByPushServices", service.sendTest(owner(auth)));
     }
 
     private long owner(Authentication auth) {

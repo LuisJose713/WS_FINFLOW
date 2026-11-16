@@ -14,6 +14,8 @@ import java.util.Optional;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -22,6 +24,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AdminAuthorizationTest {
+    @Test void notificationSchedulingIsAdminOnly() throws Exception {
+        mvc.perform(get("/admin/notifications").header("Authorization", bearer("USER"))).andExpect(status().isForbidden());
+        mvc.perform(post("/admin/notifications").header("Authorization", bearer("USER"))
+            .contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        mvc.perform(delete("/admin/notifications/00000000-0000-0000-0000-000000000000")
+            .header("Authorization", bearer("USER"))).andExpect(status().isForbidden());
+    }
     @Autowired MockMvc mvc;
     @Autowired JwtUtil jwtUtil;
     @MockBean UserRepository users;
