@@ -10,6 +10,15 @@ import java.time.LocalDateTime;
 @EntityListeners(com.softdevcode.ws_finflow.security.ProtectedLookupListener.class)
 @Table(name = "users")
 public class User {
+    // Not a password hash: Google registrations have no local password until
+    // their owner explicitly creates one after confirming the linked identity.
+    public static final String GOOGLE_ONLY_PASSWORD = "!GOOGLE_ONLY";
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean hasPassword() {
+        return password != null && !password.isBlank() && !GOOGLE_ONLY_PASSWORD.equals(password);
+    }
+
     @Setter
     @Getter
     @Id

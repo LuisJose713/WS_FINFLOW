@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -16,4 +17,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("select u from User u where u.usernameLookup = :#{@fieldCipher.lookup('users.username', #username)}")
     Optional<User> findByUsername(@Param("username") String username);
+
+    // The converter decrypts this projection in the application. SQL cannot
+    // compare the casing of emails stored under randomized encryption.
+    @Query("select u.email from User u")
+    List<String> registeredEmails();
 }

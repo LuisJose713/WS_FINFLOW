@@ -48,7 +48,8 @@ public class AuthController {
             return ResponseEntity.status(429).body(Map.of("error","Demasiados intentos. Prueba más tarde."));
         }
         Optional<User> userOpt = userRepository.findByEmail(normalizedEmail);
-        if (userOpt.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOpt.get().getPassword())) {
+        if (userOpt.isEmpty() || !userOpt.get().hasPassword()
+                || !passwordEncoder.matches(request.getPassword(), userOpt.get().getPassword())) {
             // Do not disclose whether the account exists. Throttle by a hashed identifier.
             rateLimiter.recordFailure(normalizedEmail);
             return ResponseEntity.status(401).body(Map.of("error", "Credenciales inválidas"));
