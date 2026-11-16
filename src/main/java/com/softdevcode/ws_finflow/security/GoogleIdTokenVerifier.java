@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -17,6 +19,7 @@ import java.util.Set;
 /** A Google ID token is verified cryptographically, not accepted as a profile assertion. */
 @Service
 public class GoogleIdTokenVerifier {
+    private static final Logger log = LoggerFactory.getLogger(GoogleIdTokenVerifier.class);
     private static final String JWK_SET = "https://www.googleapis.com/oauth2/v3/certs";
     private final Set<String> allowedAudiences;
     private final String webClientId;
@@ -62,6 +65,14 @@ public class GoogleIdTokenVerifier {
             return new GoogleIdentity(subject, email.strip().toLowerCase(Locale.ROOT),
                     name == null ? "" : name.strip());
         } catch (JwtException | IllegalArgumentException ex) {
+            // Record only the validation category, never tokens, emails or personal data.
+            String reason = ex.getMessage() == null ? "" : ex.getMessage();
+            String category = reason.contains("audience") ? "AUDIENCE_MISMATCH"
+                    : reason.contains("issuer") ? "ISSUER_MISMATCH"
+                    : reason.contains("email not verified") ? "EMAIL_NOT_VERIFIED"
+                    : reason.contains("Malformed Google identity") ? "IDENTITY_INVALID"
+                    : ex instanceof JwtException ? "JWT_SIGNATURE_OR_CLAIMS" : "CLAIMS_INVALID";
+            log.warn("Google identity verification rejected: {}", category);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credencial de Google inválida");
         }
     }
