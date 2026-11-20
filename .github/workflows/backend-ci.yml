@@ -1,7 +1,7 @@
 name: Backend quality gate
 on:
   pull_request:
-    branches: [master]
+    branches: [master, 'feat/security-*']
   push:
     branches: [master]
   workflow_dispatch:
@@ -46,3 +46,5 @@ jobs:
           cache: maven
       - name: Compile and run tests
         run: mvn --batch-mode --no-transfer-progress clean verify
+      - name: Confirm patched Docker runtime image builds
+        run: docker build --pull -t finflow-backend-ci .
