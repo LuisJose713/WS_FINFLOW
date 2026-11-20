@@ -19,6 +19,7 @@ import com.softdevcode.ws_finflow.entity.Transaction;
 import com.softdevcode.ws_finflow.entity.Category;
 import com.softdevcode.ws_finflow.repository.CategoryRepository;
 import com.softdevcode.ws_finflow.repository.TransactionRepository;
+import com.softdevcode.ws_finflow.sync.FinanceChangeLog;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class TransactionService {
     private final EntityManager          em;
     private final CategoryAccessValidator categoryAccessValidator;
     private final FinancialAccountService financialAccounts;
+    private final FinanceChangeLog changeLog;
 
     // ── Todas ─────────────────────────────────────────────
     public List<Transaction> getAll(Integer userId) {
@@ -110,7 +112,9 @@ public class TransactionService {
         tx.setCurrency(currency);
         tx.setStatus(request.getStatus()     != null ? request.getStatus()   : "completed");
         tx.setCreatedAt(LocalDateTime.now());
-        return repository.save(tx);
+        Transaction saved = repository.save(tx);
+        changeLog.record(userId, "transactions");
+        return saved;
     }
 
     // ── Editar únicamente una transacción propia ─────────
@@ -139,13 +143,16 @@ public class TransactionService {
         if (request.getCurrency() != null) tx.setCurrency(request.getCurrency());
         financialAccounts.assertOwnedAndCurrency(userId,tx.getAccountId(),tx.getCurrency());
         if (request.getStatus() != null) tx.setStatus(request.getStatus());
-        return repository.save(tx);
+        Transaction saved = repository.save(tx);
+        changeLog.record(userId, "transactions");
+        return saved;
     }
 
     // ── Eliminar solo registros del usuario autenticado ───
     @Transactional
     public void delete(Integer userId, Long id) {
         repository.delete(getOwnedTransaction(userId, id));
+        changeLog.record(userId, "transactions");
     }
 
     private Transaction getOwnedTransaction(Integer userId, Long id) {

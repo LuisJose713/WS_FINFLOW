@@ -3,6 +3,7 @@ package com.softdevcode.ws_finflow.service;
 import com.softdevcode.ws_finflow.dto.TransactionRequest;
 import com.softdevcode.ws_finflow.entity.Transaction;
 import com.softdevcode.ws_finflow.repository.TransactionRepository;
+import com.softdevcode.ws_finflow.sync.FinanceChangeLog;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import static org.mockito.Mockito.*;
 class TransactionServiceSecurityTest {
     @Mock TransactionRepository repository;
     @Mock EntityManager entityManager;
+    @Mock FinanceChangeLog changeLog;
     @InjectMocks TransactionService service;
 
     @Test

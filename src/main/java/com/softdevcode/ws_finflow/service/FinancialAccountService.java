@@ -19,6 +19,7 @@ import java.util.Set;
 public class FinancialAccountService {
     private final JdbcTemplate jdbc;
     private final com.softdevcode.ws_finflow.security.FieldCipher cipher;
+    private final com.softdevcode.ws_finflow.sync.FinanceChangeLog changeLog;
 
     public record AccountView(Long id, String name, String type, String currency,
                               BigDecimal openingBalance, BigDecimal balance, boolean archived) {}
@@ -88,6 +89,7 @@ public class FinancialAccountService {
                 """,Long.class,userId,cipher.encrypt("financial_accounts.name",name),type,currency,
                 cipher.encrypt("financial_accounts.opening_balance",initial.toPlainString()),
                 cipher.lookup("financial_accounts.name",name.toLowerCase(java.util.Locale.ROOT)));
+            changeLog.record(userId, "accounts");
             return list(userId).stream().filter(x -> x.id().equals(id)).findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR));
         } catch(DataIntegrityViolationException ex) {
@@ -104,6 +106,7 @@ public class FinancialAccountService {
                 cipher.encrypt("financial_accounts.name",checkedName),type(request.type()),
                 cipher.lookup("financial_accounts.name",checkedName.toLowerCase(java.util.Locale.ROOT)),id,userId);
             if(changed==0) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Cuenta no encontrada");
+            changeLog.record(userId, "accounts");
             return list(userId).stream().filter(x -> x.id().equals(id)).findFirst().orElseThrow();
         } catch(DataIntegrityViolationException ex) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Nombre de cuenta duplicado",ex);
@@ -116,6 +119,7 @@ public class FinancialAccountService {
         int changed=jdbc.update("UPDATE financial_accounts SET archived=? WHERE id=? AND user_id=?",
             request.archived(),id,userId);
         if(changed==0) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Cuenta no encontrada");
+        changeLog.record(userId, "accounts");
         return list(userId).stream().filter(x -> x.id().equals(id)).findFirst().orElseThrow();
     }
 
@@ -162,6 +166,7 @@ public class FinancialAccountService {
             cipher.encrypt("account_transfers.amount",value.toPlainString()),
             cipher.encrypt("account_transfers.transfer_date",date.toString()),
             cipher.encrypt("account_transfers.note",note));
+        changeLog.record(userId, "accounts");
         return new TransferView(id,request.fromAccountId(),request.toAccountId(),value,date,note);
     }
 

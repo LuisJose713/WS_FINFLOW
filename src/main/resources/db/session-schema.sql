@@ -41,3 +41,18 @@ CREATE TABLE IF NOT EXISTS public.google_account_links (
     linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_google_account_links_user_id ON public.google_account_links(user_id);
+
+-- User-scoped monotonic financial revisions. A per-user row lock ensures
+-- revision ordering matches commit order even across concurrent writers.
+-- No amounts, descriptions, names or plaintext financial data are included.
+CREATE TABLE IF NOT EXISTS finflow_sync_state (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    revision BIGINT NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS finflow_sync_changes (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    revision BIGINT NOT NULL,
+    resource VARCHAR(32) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, revision)
+);
